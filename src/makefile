@@ -1,0 +1,39 @@
+CC = mpic++
+TF_DIR = /sw/summit/open-ce/anaconda-base/envs/open-ce-1.2.0-py38-0
+Flag = -O3 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++11
+LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so
+MFlag ?= -DModel_Small
+relax_dir = relax
+hist_dir = hist
+objs = \
+	rand.o InputOutput.o \
+	heisenberg.o pt.o \
+	main.o 
+
+relax_objs = $(addprefix $(relax_dir)/, $(objs))
+hist_objs = $(addprefix $(hist_dir)/, $(objs))
+
+Exe = hea-pt hea-pt-relax hea-pt-hist
+Objects = $(objs) $(relax_objs) $(hist_objs)
+tmpdir = $(relax_dir) $(hist_dir)
+all: $(tmpdir) $(Exe)
+$(relax_dir):
+	mkdir -p $(relax_dir)
+$(hist_dir):
+	mkdir -p $(hist_dir)
+hea-pt: $(objs) 
+	$(CC) $(objs) $(LDFlag) -o $@
+hea-pt-relax: $(relax_objs)
+	$(CC) $(relax_objs) $(LDFlag) -o $@
+hea-pt-hist: $(hist_objs)
+	$(CC) $(hist_objs) $(LDFlag) -o $@
+$(relax_objs): Flag+=-DTime_Series 
+$(hist_objs): Flag+=-DHIST
+%.o: %.cc
+	$(CC) -c $(Flag) $(MFlag) $< -o $@
+$(relax_dir)/%.o: %.cc
+	$(CC) -c $(Flag) $(MFlag) $< -o $@
+$(hist_dir)/%.o: %.cc
+	$(CC) -c $(Flag) $(MFlag) $< -o $@
+clean:
+	rm -rf $(Exe) $(Objects) $(tmpdir)
