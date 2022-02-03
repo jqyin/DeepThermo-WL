@@ -1,6 +1,11 @@
 #ifndef RAND_H
 #define RAND_H
 
+#ifdef DEFINE_GLOBALS
+#define GLOBAL
+#else
+#define GLOBAL extern
+#endif 
 /*structure for storage of seeds:*/
 struct seed_type 
 { 
@@ -9,7 +14,7 @@ unsigned int j;
 unsigned int k;
 };
 
-int RSEED;
+GLOBAL int RSEED;
 
 unsigned int kiss(void);
 void gettimeseed(void);

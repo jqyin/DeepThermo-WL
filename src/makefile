@@ -6,26 +6,26 @@ MFlag ?= -DModel_Small
 relax_dir = relax
 hist_dir = hist
 objs = \
-	rand.o InputOutput.o \
-	heisenberg.o pt.o \
+	rand.o parameter.o \
+	alloy.o wanglandau.o \
 	main.o 
 
 relax_objs = $(addprefix $(relax_dir)/, $(objs))
 hist_objs = $(addprefix $(hist_dir)/, $(objs))
 
-Exe = hea-pt hea-pt-relax hea-pt-hist
+Exe = hea-wl
 Objects = $(objs) $(relax_objs) $(hist_objs)
 tmpdir = $(relax_dir) $(hist_dir)
-all: $(tmpdir) $(Exe)
+all: $(Exe)
 $(relax_dir):
 	mkdir -p $(relax_dir)
 $(hist_dir):
 	mkdir -p $(hist_dir)
-hea-pt: $(objs) 
+hea-wl: $(objs) 
 	$(CC) $(objs) $(LDFlag) -o $@
-hea-pt-relax: $(relax_objs)
+hea-wl-relax: $(relax_objs)
 	$(CC) $(relax_objs) $(LDFlag) -o $@
-hea-pt-hist: $(hist_objs)
+hea-wl-hist: $(hist_objs)
 	$(CC) $(hist_objs) $(LDFlag) -o $@
 $(relax_objs): Flag+=-DTime_Series 
 $(hist_objs): Flag+=-DHIST

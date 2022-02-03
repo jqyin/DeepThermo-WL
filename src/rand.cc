@@ -1,4 +1,4 @@
-#include "rand.h"
+#include "rand.hpp"
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -15,7 +15,7 @@ struct seed_type seed = {314159265, 362436069, 521288629};
 */  
 
 /*function to set seeds:*/
-void kisset(ii,jj,kk) unsigned int ii,jj,kk;
+void kisset(unsigned int ii,unsigned int jj,unsigned kk) 
 { seed.i=ii; seed.j=jj; seed.k=kk; }
 
 /*function to produce random number:*/

@@ -2,10 +2,10 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
-#include "InputOutput.h"
-#include "water.h"
-#include "wanglandau.h"
-#include "pt.h"
+#include "parameter.hpp"
+#include "alloy.hpp"
+#include "wanglandau.hpp"
+
 
 /*
 NOTE - when adding a new input parameter, it is necessary to update all of 

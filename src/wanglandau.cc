@@ -3,17 +3,125 @@
 #include <math.h>
 #include<memory.h>
 #include<assert.h>
-#include "mpi.h"
 
-#include "rand.h"
-//#include "model.h"
-#include "pt.h"
-#include "wanglandau.h"
-#include "water.h"
-#include "MD_trial.h"
+#include "rand.hpp"
+#include "wanglandau.hpp"
+#include "alloy.hpp"
 
-extern int myrank;
-extern int nprocs;
+
+/*void seqMC(){
+	int i,j,k, x, y, z;
+	double dr, eta1, eta2, etasq, deltaE, im, E1, E2;
+	double rx, ry, rz, c, s, u, sx, sy, sz;
+	for(i=0; i<N; i++)
+		for(j=0; j<N; j++)
+			for(k=0; k<N; k++){ // sweep over all spins
+				
+			   dr=(2.0*randd1()-1.0)*D;
+			   do{
+					eta1 = 1.0 - 2.0*randd1();
+					eta2 = 1.0 - 2.0*randd1();
+					etasq = eta1*eta1 + eta2*eta2;
+			   }while(etasq >1.0);
+				//these are the new unit vectors
+				rx = 2.0*eta1*sqrt(1.0-etasq);
+				ry = 2.0*eta2*sqrt(1.0-etasq);
+				rz = 1.0 - 2.0*etasq;
+
+				//angle constants
+				c=cos(dr);
+				s=sin(dr);
+				u=1.0-c;		  
+		
+				sx = S[0][i][j][k];
+				sy = S[1][i][j][k];
+				sz = S[2][i][j][k];
+
+				//Perform the rotation on the selected spin
+				S[0][i][j][k] = (u*rx*rx + c)*sx     + (u*ry*rx - s*rz)*sy  + (u*rz*rx + ry*s)*sz ;
+				S[1][i][j][k] = (u*rx*ry + rz*s)*sx  + (u*ry*ry + c)*sy     + (u*rz*ry - rx*s)*sz ;
+				S[2][i][j][k] = (u*rx*rz - ry*s)*sx  + (u*ry*rz + rx*s)*sy  + (u*rz*rz + c)*sz ;	
+
+
+				E1 = currEtot;
+				E2 = Etot();
+				if(Metropolis(E1, E2) == 1){// accept
+					currEtot = E2;
+				}else{//reject
+					S[0][i][j][k] = sx;
+					S[1][i][j][k] = sy;
+					S[2][i][j][k] = sz;
+				}
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+			   dr=(2.0*randd1()-1.0)*D;
+			   do{
+					eta1 = 1.0 - 2.0*randd1();
+					eta2 = 1.0 - 2.0*randd1();
+					etasq = eta1*eta1 + eta2*eta2;
+			   }while(etasq >1.0);
+				//these are the new unit vectors
+				rx = 2.0*eta1*sqrt(1.0-etasq);
+				ry = 2.0*eta2*sqrt(1.0-etasq);
+				rz = 1.0 - 2.0*etasq;
+
+				//angle constants
+				c=cos(dr);
+				s=sin(dr);
+				u=1.0-c;		  
+		
+				sx = Sb[0][i][j][k];
+				sy = Sb[1][i][j][k];
+				sz = Sb[2][i][j][k];
+
+				//Perform the rotation on the selected spin
+				Sb[0][i][j][k] = (u*rx*rx + c)*sx     + (u*ry*rx - s*rz)*sy  + (u*rz*rx + ry*s)*sz ;
+				Sb[1][i][j][k] = (u*rx*ry + rz*s)*sx  + (u*ry*ry + c)*sy     + (u*rz*ry - rx*s)*sz ;
+				Sb[2][i][j][k] = (u*rx*rz - ry*s)*sx  + (u*ry*rz + rx*s)*sy  + (u*rz*rz + c)*sz ;	
+
+
+				E1 = currEtot;
+				E2 = Etot();
+				if(Metropolis(E1, E2) == 1){// accept
+					currEtot = E2;
+				}else{//reject
+					Sb[0][i][j][k] = sx;
+					Sb[1][i][j][k] = sy;
+					Sb[2][i][j][k] = sz;
+				}
+			}
+}
+*/
+int Metropolis(double Ei, double Ef)
+{
+  double R;
+
+  if(Ef<Ei)
+    {
+      //accept
+//      currEtot=Ef;
+  //    currnonbondE=Efastf;
+      return 1;
+    }
+  else
+    {
+		  R=exp(-(Ef-Ei)/(T*T_scale));
+
+      if(randd1()<R)
+	{
+	  //accept
+//	  currEtot=Ef;
+//	  currnonbondE=Efastf;
+	  return 1;
+	}
+      else
+	{
+	  //reject
+	  return 0;
+	};
+    };
+}
+
+
 
 void global_update(){
 	int i,j;
@@ -23,6 +131,7 @@ void global_update(){
     double sum =0.0;
 
 	if(wllng[0] != 0.0) {
+
 		w = (PERW*wllng[0]);     // assuming it's monotonically increase;
 		fp = fopen("after_global_updata.dat", "w");
 		for(i=0;i<D1BINS;++i){
@@ -34,7 +143,7 @@ void global_update(){
 		}
 		fclose(fp);
 	}else{ // first iteration;
-		j = 0; //(int)((1-PERW)*D1BINS);
+		j = (int)((1-PERW)*D1BINS);
 		for(i=j+1;i<D1BINS;++i){
 			dg = KAPA*lnwlf * exp( -LAMDA/(i-j) );
 			wllng[i] += dg;
@@ -44,12 +153,13 @@ void global_update(){
 //	KAPA = sqrt(KAPA);
 	}
 
+
 void polint(const  double* xa, const double* ya, int n, double x, double* y,double*dy){
 	int i,m,ns=0;
 	double den,dif,dift,ho,hp,w;
 	double*c, *d;
-	c=malloc(sizeof(double)*n);
-	d=malloc(sizeof(double)*n);
+	c=(double*)malloc(sizeof(double)*n);
+	d=(double* )malloc(sizeof(double)*n);
 	dif=fabs(x-xa[0]);
 	for(i=0;i<n;i++){
 		if( (dift=fabs(x-xa[i])) <dif){
@@ -77,150 +187,20 @@ void polint(const  double* xa, const double* ya, int n, double x, double* y,doub
 	free(d);
 }
 
-void extendg(int n){
-	double* temp;
-	int* temp2;
-	int i, j,size;
-	double xa[10];
-	double ya[10];
-	int step=10;
-	double x,err;
-
-	size = sizeof(double)*(D1BINS+n);
-
-	temp = malloc(size);
-	memcpy(temp+n,  Df, D1BINS*sizeof(double));
-	for(i=n-1;i>=0;i--){
-		temp[i] = (Df[1]-Df[0])*(i-n)+Df[0];
-		if(temp[i] <= 0)
-			temp[i] = temp[i+1];
-		assert(temp[i] > 0);
-	}
-	free(Df);
-	Df = temp;
-
-    temp = malloc(size);
-	memcpy(temp+n,  Dr, D1BINS*sizeof(double));
-	for(i=n-1;i>=0;i--){
-		temp[i] = (Dr[1]-Dr[0])*(i-n)+Dr[0];
-		if(temp[i] <= 0)
-			temp[i] = temp[i+1];
-		assert(temp[i] > 0);
-	}
-	free(Dr);
-	Dr = temp;
-
-
-
-    temp = malloc(size);
-	memcpy(temp+n,  wllng, D1BINS*sizeof(double));
-	assert(D1BINS > step*10);
-	for(i=0;i<10;i++){
-		xa[i] = step*i/invdWLD1+WLD1min;
-		ya[i] = wllng[step*i];
-	}
-	for(i=0;i<n;i++){
-		x = WLD1min - (i+1)/invdWLD1; 
-		polint(xa,ya,10,  x, &temp[n-1-i], &err);
-		for(j=9;j>0;j--){
-			xa[j] = xa[j-1];
-			ya[j] = ya[j-1];
-		}
-		xa[0]= x;
-		ya[0]= temp[n-1-i];
-	}
-
-//	for(i=0;i<n;i++) //similar to boosting ;
-//		temp[i] -= KAPA*lnwlf * exp( -LAMDA/() );
-
-	free(wllng);
-	wllng=temp;
-	//wllng = malloc(size);
-	//memcpy(wllng,  temp, size);
-
-//	memcpy(temp+n,  wlH, D1BINS*sizeof(double));
-//	for(i=0;i<n;i++)
-//		temp[i] = 0.0;
-	free(wlH);
-	wlH = malloc(size);
-//	memcpy(wlH,  temp, size);
-    memset(wlH, 0, size);
-
-	size = sizeof(int)*(D1BINS+n);
-
-	temp2 = malloc(size);
-	memcpy(temp2+n,  attemptdiff, D1BINS*sizeof(int));
-	for(i=0;i<n;i++)
-		temp2[i] = 0;  
-	free(attemptdiff);
-	attemptdiff=temp2;
-
-	temp2 = malloc(size);
-	memcpy(temp2+n,  acceptdiff, D1BINS*sizeof(int));
-	for(i=0;i<n;i++)
-		temp2[i] = 0;  
-	free(acceptdiff);
-	acceptdiff=temp2;
-
-	temp2 = malloc(size);
-	memcpy(temp2+n,  attemptrot, D1BINS*sizeof(int));
-	for(i=0;i<n;i++)
-		temp2[i] = 0;  
-	free(attemptrot);
-	attemptrot=temp2;
-
-	temp2 = malloc(size);
-	memcpy(temp2+n,  acceptrot, D1BINS*sizeof(int));
-	for(i=0;i<n;i++)
-		temp2[i] = 0;  
-	free(acceptrot);
-	acceptrot=temp2;
-
-	free(attdiff);
-	attdiff=malloc(size);
-
-	free(actdiff);
-	actdiff=malloc(size);
-
-	free(attrot);
-	attrot=malloc(size);
-
-	free(actrot);
-	actrot=malloc(size);
-
-
-	temp2 = malloc(size);
-	memcpy(temp2+n,  mask, D1BINS*sizeof(int));
-	for(i=0;i<n;i++)
-		temp2[i] = 1;  // haven't use mask variable;
-	free(mask);
-	mask =temp2;
-	//mask = malloc(size);
-	//memcpy(mask,  temp2, size);
- //   memset(mask,1, size);
-
-	D1BINS += n;
-//	LOWESTE = currEtot*invN;
-    WLD1min -= n/invdWLD1;
-
-	//free(temp);
-	//free(temp2);
-}
-
 //NEW VERSION for production run
 //uses an intermediate (10th) iteration to generate the average order parameter values
 void production_run(void)
 {
-	int i,k;
+	int i,j,k;
 	double Hmin=0.0,Hmax=0.0,tmp=0.0;
 	FILE *ifp1,*ifp2,*ifp3,*ofp;
 	char s1[512],s3[512];
 	
 	//initialize the production run histograms
-	init_production_run();
+//	init_production_run();
 
 	//Reading in the final iteration number from the restart function
-	ifp1=fopen("DOS_H_iter012.dat","r");
+	ifp1=fopen("g.dat","r");
 	if( ifp1 == NULL )
 	{
 		fprintf(stderr,"Error in production_run(), the file could not be opened!\n\n"); 
@@ -228,23 +208,8 @@ void production_run(void)
 	};
 	fscanf(ifp1,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&lnwlf,&TotalSweeps,&IterSweeps,&tmp);
 	//fprintf(stderr,"#%d\t%g\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL());
-    fclose(ifp1);
-	
-	//Reading in the current confinguration for the restart
-	ifp2=fopen("restart.XYZ","r");
-	//fscanf(ifp2,"#\t%lg\t%lg\n",&tmp1,&tmp2);
-	for(i=0;i<N;++i)
-    {
-		fscanf(ifp2,"%lg\t%lg\t%lg%lg\t%lg\t%lg%lg\t%lg\t%lg\n",&(Wmol[i].Ox),&(Wmol[i].Oy),&(Wmol[i].Oz),
-			&(Wmol[i].H1x),&(Wmol[i].H1y),&(Wmol[i].H1z),&(Wmol[i].H2x),&(Wmol[i].H2y),&(Wmol[i].H2z) );    
-		//fprintf(stderr,"%g\t%g\t%g\n",x[i],y[i],z[i]); 
-    };
-	fclose(ifp2);
+        fclose(ifp1);
 
-	//Calculate the energy of the restart configuration
-	currEtot=Etot(Wmol);
-	//currnonbondE=nonbondEnergy();
-	
 	//Introduce a metropolis routine to ensure the configuration is not stuck
 	//Seq(2.5,0,1000,10);	
 
@@ -261,11 +226,16 @@ void production_run(void)
 	//the moves below are the same as those in wlhybrid
 	while(Hmin < ProductionBinSamps)
 	{
-		wlhybrid();
+
+	//	wlhybrid();
+
+		for(i=0;i<N*N;++i)
+			Rot();
+
 		IterSweeps+=1;
 		//This loop finds the flatness and the number of unsampled bins
 		
-		if( (IterSweeps % 20000) == 0 )
+		if( (IterSweeps % 10) == 0 )
 		{
 			//Initialize the max and min variables
 			Hmin=1.0e300;
@@ -292,11 +262,11 @@ void production_run(void)
 			for(i=0;i<D1BINS;++i)
 			{	
 				//Printing Out 1D Data
-				fprintf(ofp,"%g\t%18.10e\n",i/invdWLD1+WLD1min,wlH[i]);
+				fprintf(ofp,"%g\t%18.10e \t %g\n",i/invdWLD1+WLD1min,wlH[i], wllng[i]);
 			};
 			fflush(ofp);
 			fclose(ofp);
-			//fprintf(stderr,"%g\t%g\t%g\n",Hmin,Hmax,wlH[0]);
+			//fprintf(stderr,"%g\t%g\t%g\n",Hmin,Hmax,wlHi[0]);
 		
 			//writeEERgyr();		
 		};
@@ -305,25 +275,7 @@ void production_run(void)
 
 	}
 
-	//Now we divide the order parameter histograms by the number of measurements 
-	for(i=0;i<D1BINS;++i)
-		if(wlH[i] > 0.0)
-		{
-			HRg[i] = HRg[i]/(1.0*wlH[i]);
-			HEEdist[i] = HEEdist[i]/(1.0*wlH[i]);
-			Hcore[i] = Hcore[i]/(1.0*wlH[i]);
-			for(k=0;k<GRBINS;k++)
-				gr[i][k] = gr[i][k]/(1.0*wlH[i]);
-			//fprintf(stderr,"%g\t%g\n",i/invdWLD1+WLD1min,HRg[i][0]);
-		}
-		else
-		{
-			HRg[i] = 0.0;
-			HEEdist[i] = 0.0;
-			Hcore[i] = 0.0;
-			for(k=0;k<GRBINS;k++)
-				gr[i][k] = gr[i][k]/(1.0*wlH[i]);
-		};
+
 
 	//Keeps track of the total number of sweeps - Original + Production
 	TotalSweeps+=IterSweeps;
@@ -344,24 +296,16 @@ void production_run(void)
 	//this allows us to not worry about what the final DOS was, or that all runs have the same final DOS
 	//numf=20;
 	
-	ifp3=fopen("restart.DOS_H","r");
-	fscanf(ifp3,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&tmp,&tmp,&tmp,&tmp);
+//	ifp3=fopen("restart.DOS_H","r");
+//	fscanf(ifp3,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&tmp,&tmp,&tmp,&tmp);
 	//fprintf(stderr,"%03d\n",numf);
-	readg();  //Note:  this erases the production run histogram, but it has already been written out
+//	readg();  //Note:  this erases the production run histogram, but it has already been written out
        
-	//Print out the results
-	orderqs();
-	writeEERgyr();
-}
 
-//bins the order parameters into their arrays - accepts the new bin from the Wang-Landau function
-void histfill_prun(int pbin)
-{
-	//pbin is the energy index
-	HEEdist[pbin]+=EEdist();
-	HRg[pbin]+=Rgyr2();
-	Hcore[pbin]+=coredensity();	  
-	grcalculate(pbin);
+	//Print out the results
+	thermoqs(); 
+//	write_raw_data();
+    Tavg();
 }
 
 
@@ -378,10 +322,10 @@ void init_production_run(void)
 	//Dynamic Memory Allocation - this has to be done because an input file is used.
 	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
 	//allocate storage for an array of pointers
-	HRg = malloc( D1BINS * sizeof(double ) );
-	HEEdist = malloc( D1BINS * sizeof(double ) );
-	Hcore = malloc( D1BINS * sizeof(double ) ); 
-	gr = malloc( D1BINS * sizeof(double *) );
+	HRg = (double*)malloc( D1BINS * sizeof(double ) );
+	HEEdist = (double*)malloc( D1BINS * sizeof(double ) );
+	Hcore = (double*)malloc( D1BINS * sizeof(double ) ); 
+	gr = (double**)malloc( D1BINS * sizeof(double *) );
 	//Check to see if memory was allocated properly
 	if ( (HRg == NULL) || (HEEdist == NULL) || (Hcore == NULL) )
     {
@@ -399,7 +343,7 @@ void init_production_run(void)
 
 	for(i=0;i<D1BINS;i++)
 	{
-		gr[i] = malloc( GRBINS * sizeof(double) );
+		gr[i] = (double*)malloc( GRBINS * sizeof(double) );
 	}
 
 	//Initialize Arrays
@@ -416,8 +360,8 @@ double flatWL(void)
 	double avg,min;
   
 	k=0;  //number of sampled bins, used to calculate average
-	min=1.0e300;  //the minimum sampled bin in the histogram wlH[][]
-	avg=0.0;  //average height of the histogram wlH[][]
+	min=1.0e300;  //the minimum sampled bin in the histogram wlHi[][]
+	avg=0.0;  //average height of the histogram wlHi[][]
 	numbelow_flat=0.0;  //number of bins below the flatness criteria
   
 	//This loop finds the flatness and the number of unsampled bins
@@ -425,14 +369,14 @@ double flatWL(void)
 		if(mask[i]==1)
 		{			
 			//minimum of the histogram
-			if( (wlH[i]<min) )
+			if( (wlH[i]*prof[i]<min) )
 			{
-				min=wlH[i];
+				min=wlH[i]*prof[i];
 			};
 			//average of the histogram
 			if( (wlH[i]>0.0) )
 			{
-				avg+=wlH[i];
+				avg+=wlH[i]*prof[i];
 				k+=1;
 			};	
 		};
@@ -447,7 +391,7 @@ double flatWL(void)
     for(j=0;j<D2BINS;++j)
     if(mask[i]==1)
     {
-    if( wlH[i]<Flatness*avg )
+    if( wlHi[i]<Flatness*avg )
     numbelow_flat+=1.0;
     };
     //Stores the percentage of states below the flatness criteria	
@@ -459,6 +403,7 @@ double flatWL(void)
   
 }
 
+
 //reset accumulated histogram
 void resetWL()
 {
@@ -466,6 +411,7 @@ void resetWL()
     double maxg = -1e300;
 	for(i=0;i<D1BINS;++i){
 		wlH[i]=0.0;
+	//	wlHui[i]=wlHdi[i]=0.0;
 		if(wllng[i] > maxg)
 			maxg = wllng[i];
 	}
@@ -501,20 +447,6 @@ void writemask(void)
       fprintf(ofp,"%g\t%d\n",i/invdWLD1+WLD1min,mask[i]);
 }
 
-void read_D(void){
-	int i,temp;
-	FILE *fp;
-	fp=fopen("dfdr.dat","r");
-	if(fp){
-		for(i=0;i<D1BINS;++i)
-		{
-			fscanf(fp,"%d \t %lg \t %lg \n",&temp,&(Df[i]),&(Dr[i]));
-		};
-	}
-}
-
-
-
 //reads in the g.dat file
 void readg(void)
 {
@@ -523,15 +455,15 @@ void readg(void)
 	char s1[512];
 	double tmp;
   
-	sprintf(s1,"DOS_H_iter%03d.dat",numf);
-	ifp=fopen(s1,"r");
+//	sprintf(s1,"DOS_H_iter%03d.dat",numf);
+	ifp=fopen("g.dat","r");
 	//Reading in the DOS and histogram from the restart function
-	fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&lnwlf,&TotalSweeps,&IterSweeps,&tmp);
+	fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\t%lg\n",&numf,&lnwlf,&TotalSweeps,&i, &tmp, &tmp);
 	//fprintf(stderr,"#%d\t%lg\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,tmp);
 	for(i=0;i<D1BINS;++i)
     {
-		fscanf(ifp,"%lg\t%lg\t%lg\n",&tmp,&(wllng[i]),&(wlH[i]));
-		//fprintf(stderr,"%g\t%18.10e\t%g\n",tmp,wllng[i],wlH[i]);
+		fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wllng[i]),&(wlH[i]),&tmp );
+		//fprintf(stderr,"%g\t%18.10e\t%g\n",tmp,wllngi[i],wlHi[i]);
     };
 	fclose(ifp);
   
@@ -555,19 +487,22 @@ void write_DOS_H(void)
 	//Find the minimum of the DOS
 	for(i=0;i<D1BINS;++i)
 	{
-		if((wllng[i]>maxg) && (mask[i]==1))
-			maxg=wllng[i];
-		if((wllng[i]<ming) && (mask[i]==1))
-			ming=wllng[i];
+		if((wllng[i]-log(prof[i])>maxg) && (mask[i]==1))
+			maxg=wllng[i]-log(prof[i]);
+		if((wllng[i]-log(prof[i])<ming) && (mask[i]==1))
+			ming=wllng[i]-log(prof[i]);
 	};
   
 	//Label each iteration with the mod. factor, number of sweeps, and flatness
-	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL());
+	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL(),Rc_min ); //1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot  );
 	for(i=0;i<D1BINS;++i)
 	{
 		//Printing Out 1D Data
-		//fprintf(ofp,"%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i]);
-		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\t%g\t%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i], 1.0*actdiff[i]/attdiff[i], 1.0*actrot[i]/attrot[i],  1.0*Lca[i]/nprocs, 1.0*actV[i]/attV[i],1.0*actmd[i]/attmd[i]  );
+		//fprintf(ofp,"%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllngi[i]-maxg),wlHi[i]);
+		if(mask[i] ==1)
+		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\n",(-2*N*N+i*4)*invN,(wllng[i]-log(prof[i])-maxg),wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
+
+//		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllngi[i]-log(prof[i])-maxg),wlHi[i], 1.0*acceptrot[i]/attemptrot[i]);
 	};
   
 	fflush(ofp);
@@ -589,7 +524,7 @@ void write_normDOS(void)
 	//Find the maximum of the DOS
 	for(i=0;i<D1BINS;++i)
 	{
-		if((wllng[i]>maxg) && (mask[i]==1))
+		if((wllngi[i]>maxg) && (mask[i]==1))
 			maxg=wllng[i];
 	};
   
@@ -606,7 +541,7 @@ void write_normDOS(void)
     {
 		//Printing Out 1D Data
 		fprintf(ofp,"%g\t%g\n",i/invdWLD1+WLD1min,exp(wllng[i]-maxg)/area);
-		//fprintf(stderr,"%g\t%g\t%g\n",wllng[i],area,exp(wllng[i]-maxg)/area);
+		//fprintf(stderr,"%g\t%g\t%g\n",wllngi[i],area,exp(wllngi[i]-maxg)/area);
     };
 	fflush(ofp);
 	fclose(ofp);
@@ -653,111 +588,13 @@ void writeEERgyr(void)
 	fclose(ofp4);
 }
 
-//Function that writes out appropriate files used in the restart function "read_restart"
-void write_restart(void)
-{
-	int i;
-	FILE *ofp1,*ofp2,*ofp3;
-	char s1[512];
-  
-	ofp1=fopen("restart.DOS_H","w");
-  
-	//Writing the DOS and histogram for the restart function
-	fprintf(ofp1,"#%d\t%18.10e\t%d\t%d\t%18.10e\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL());
-	for(i=0;i<D1BINS;++i)
-    {
-		fprintf(ofp1,"%g\t%18.10e\t%18.10e\n",i/invdWLD1+WLD1min,wllng[i],wlH[i]);
-    };
-	fflush(ofp1);
-	fclose(ofp1);
-  
-	//Writing out the current confinguration for the restart
-	ofp2=fopen("restart.XYZ","w");
-	//fprintf(ofp2,"#\t%g\t%g\n",Etot(),fastnonbondEnergy());
-	for(i=0;i<N;++i)
-    {
-		fprintf(ofp2,"%18.10e\t%18.10e\t%18.10e%18.10e\t%18.10e\t%18.10e%18.10e\t%18.10e\t%18.10e\n",(Wmol[i].Ox),(Wmol[i].Oy),(Wmol[i].Oz),
-			(Wmol[i].H1x),(Wmol[i].H1y),(Wmol[i].H1z),(Wmol[i].H2x),(Wmol[i].H2y),(Wmol[i].H2z));
-    };
-	fflush(ofp2);
-	fclose(ofp2);
-  
-	//If in the middle of a production run, write out the order parameter histograms
-	if( ProductionRun == 1 )
-    {	
-		ofp3=fopen("restart.ProdRun","w");
-		for(i=0;i<D1BINS;++i)
-		{
-			fprintf(ofp3,"%18.10e\t%18.10e\t%18.10e\t%18.10e\n",i/invdWLD1+WLD1min,HRg[i],HEEdist[i],Hcore[i]);
-		};	
-		fflush(ofp3);
-		fclose(ofp3);
-    };
-  
-}
-
-//Restart 'reading' function that allows simulations to be started from any given checkpoint
-void read_restart(void)
-{
-	int i;
-	double tmp=0.0,tmp1=0.0,tmp2=0.0;
-	FILE *ifp1,*ifp2,*ifp3;
-	ifp1=fopen("restart.DOS_H","r");
-
-	//Reading in the DOS and histogram from the restart function
-	fscanf(ifp1,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&lnwlf,&TotalSweeps,&IterSweeps,&tmp);
-	//fprintf(stderr,"#%d\t%18.10e\t%d\t%d\t%18.10e\n",numf,lnwlf,TotalSweeps,IterSweeps,tmp);
-	for(i=0;i<D1BINS;++i)
-    {
-		fscanf(ifp1,"%lg\t%lg\t%lg\n",&tmp,&(wllng[i]),&(wlH[i]));
-		//fprintf(stderr,"%g\t%18.10e\t%18.10e\n",tmp,wllng[i],wlH[i]);
-    };
-	fclose(ifp1);
-  
-	//if(flatWL() > Flatness)
-		//lnwlf = lnwlf/IterationFactor;
- 
-	//Reading in the current confinguration for the restart
-	ifp2=fopen("restart.XYZ","r");
-	//fscanf(ifp2,"#\t%lg\t%lg\n",&tmp1,&tmp2);
-	for(i=0;i<N;++i)
-    {
-		fscanf(ifp2,"%lg\t%lg\t%lg%lg\t%lg\t%lg%lg\t%lg\t%lg\n",&(Wmol[i].Ox),&(Wmol[i].Oy),&(Wmol[i].Oz),
-			&(Wmol[i].H1x),&(Wmol[i].H1y),&(Wmol[i].H1z),&(Wmol[i].H2x),&(Wmol[i].H2y),&(Wmol[i].H2z) );    
-		//fprintf(stderr,"%18.10e\t%18.10e\t%18.10e\n",x[i],y[i],z[i]); 
-    };
-	fclose(ifp2);
-
-	//Calculate the energy of the restart configuration
-	currEtot=Etot(Wmol);
-//	currnonbondE=nonbondEnergy();
-	//fprintf(stderr,"%g\t%d\t%f\t%f\t%f\t%f\n",lnwlf,numf,currEtot*invN,tmp1*invN,currnonbondE*invN,tmp2*invN);
-
-	if( (currEtot < WLD1min*N) || (currEtot > WLD1max*N) )
-	{
-		fprintf(stderr,"Error: Total energy - currEtot=%f - is out of bounds!\n",currEtot);
-		exit(1);
-	};
- 
-	//If in the middle of a production run, read in the order parameter histograms
-	if( ProductionRun == 1 )
-    {	
-		ifp3=fopen("restart.ProdRun","r");
-		for(i=0;i<D1BINS;++i)
-		{
-			fscanf(ifp3,"%lg\t%lg\t%lg\t%lg\n",&tmp,&(HRg[i]),&(HEEdist[i]),&(Hcore[i]));
-	    };
-	
-		fclose(ifp3);
-    };
-  
-}
 
 //routine to initialize things for the Wang-Landau simulation
 void initWL(void)
 {
-	int i,k;
+	int i,j,k;
 	int n;
+	double Ei;
 
 	//make sure that the polymer is initialized
 	//initialize();
@@ -767,12 +604,10 @@ void initWL(void)
 	ProductionRun=0;		//Initially the production run is turned off
   
 	tMC = 0;
-	for(i=0; i<dwl;i++){
-		Ed[i] = malloc(sizeof(int)*nprocs);
-		lnwd[i] = malloc(sizeof(double)*nprocs);
-	}
 	//Primary Binning Direction for WL Simulation
-	D1BINS = (int)((WLD1max - WLD1min)/(dWLD1*invN));
+	//D1BINS = (int)((WLD1max - WLD1min)/(dWLD1*invN));
+	D1BINS = 129; //513; //2049; // Ising 32x32;
+	dWLD1 = (WLD1max - WLD1min)/invN/D1BINS;
 
 	//Inverse Bin Width
 	invdWLD1=1.0/(dWLD1*invN);
@@ -787,92 +622,126 @@ void initWL(void)
 	//Dynamic Memory Allocation - this has to be done because an input file is used.
 	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
 	//allocate storage for an array of pointers
-    Lc  = 	malloc( D1BINS * sizeof(double ) );
-    Lca  = malloc( D1BINS * sizeof(double ) );
+  
+	wlH = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHi = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHu = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHd = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHt = (double*)malloc( D1BINS * sizeof(double ) );
+	wllngt = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHui = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHdi = (double*)malloc( D1BINS * sizeof(double ) );
+	prof = (double*)malloc( D1BINS * sizeof(double ) );
+	wllng = (double*)malloc( D1BINS * sizeof(double ) );
+	wllngi = (double*)malloc( D1BINS * sizeof(double ) );
+	mask = (int*)malloc( D1BINS * sizeof(int ) );
 
-	wlH = malloc( D1BINS * sizeof(double ) );
-	wllng = malloc( D1BINS * sizeof(double ) );
-	mask = malloc( D1BINS * sizeof(int ) );
+	attemptrot = (int *)malloc(D1BINS*sizeof(int));
+	acceptrot = (int *)malloc(D1BINS*sizeof(int));
 
-	attemptdiff = malloc(D1BINS*sizeof(int));
-	acceptdiff = malloc(D1BINS*sizeof(int));
-	attemptrot = malloc(D1BINS*sizeof(int));
-	acceptrot = malloc(D1BINS*sizeof(int));
-	attemptV = malloc(D1BINS*sizeof(int));
-	acceptV = malloc(D1BINS*sizeof(int));
+/*	cntMag = malloc(D1BINS*sizeof(int) );
+	for(i=0; i < sizeHistMag; i++){
+		histMag[i] = malloc(D1BINS*sizeof(int) );
+		histMag2[i] = malloc(D1BINS*sizeof(int) );
+		histMag4[i] = malloc(D1BINS*sizeof(int) );
+	}
+	for(i =0; i<D1BINS; i++)
+		cntMag[i] = 0;
+	for(j=0; j < sizeHistMag; j++)
+		for(k=0; k < D1BINS; k++){
+				histMag[j][k] = 0; 
+				histMag2[j][k] = 0;
+				histMag4[j][k] = 0;
+			}
+			*/
+	Mavg = (double*)malloc( D1BINS * sizeof(double ) );
+	Mavg2 = (double*)malloc( D1BINS * sizeof(double ) );
+	Mavg4 = (double*)malloc( D1BINS * sizeof(double ) );
+	for(i=0;i<D1BINS;i++){
+		Mavg[i]=Mavg2[i]=Mavg4[i]=0.0;
+	}
 
-	attdiff = malloc(D1BINS*sizeof(int));
-	actdiff = malloc(D1BINS*sizeof(int));
-	attrot = malloc(D1BINS*sizeof(int));
-	actrot = malloc(D1BINS*sizeof(int));
-	attV = malloc(D1BINS*sizeof(int));
-	actV = malloc(D1BINS*sizeof(int));
-
-	Df = malloc(D1BINS*sizeof(double));
-	Dr = malloc(D1BINS*sizeof(double));
-
-	list = malloc(sizeof(int) *nprocs);
 	//Check to see if memory was allocated properly
 	if ( (wlH == NULL) || (wllng == NULL) || (mask == NULL) )
     {
-		if(myrank == 0)
-			fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
+        fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
         exit(1);
     };
 
-	//Run the standard MC routine until the configuration has energy within the WL simulation energy range
-	T=100;
-	while( (currEtot*invN> WLD1max)  )   // || (currEtot*invN<WLD1min) )
-    {
-		seqMC();
-		if(myrank == 0)
-			fprintf(stderr,"Relaxing:  %g of %g \n",currEtot*invN,WLD1max);
-    };
- 
-  
 	//Initialize Arrays
 	for(i=0;i<D1BINS;++i)
 	{
-		Lc[i] = Lc0;
+
+		wllngi[i]=0.0;
+		wlHi[i]=0.0;
+		wlHui[i]=0.0;
+		wlHdi[i]=0.0;
 		wllng[i]=0.0;
 		wlH[i]=0.0;
+		wlHu[i]=0.0;
+		wlHd[i]=0.0;
+		prof[i] = 1.0;
 		mask[i]=1;
-
-		attemptdiff[i]=0;
 		attemptrot[i]=0;
-		acceptdiff[i]=0;
 		acceptrot[i]=0;
 
-				attemptV[i]=0;
-		acceptV[i]=0;
-
-			Df[i] = DD;			//0 + i*(DD-DD0)/D1BINS;
-			Dr[i] = D;				//0 + i*(D-D0)/D1BINS;
-		//fprintf(stderr,"%d\t%g\t%d\n",i,wllng[i],mask[i]);
 	};
+	mask[1] = 0;
+//	mask[D1BINS-2] = 0;
 
- 	read_D(); // read optimized step length file;
+		//Run the standard MC routine until the configuration has energy within the WL simulation energy range
+/*	T=1000;
+	while( (currEtot*invN> WLD1max)  )   // || (currEtot*invN<WLD1min) )
+    {
+		seqMC();
+		fprintf(stderr,"Relaxing:  %g of %g \n",currEtot*invN,WLD1max);
+    };
 
 	while(currEtot*invN<WLD1min){ // extend ground energy;
 		seqMC();
-		if(myrank == 0)
-			fprintf(stderr,"Relaxing:  %g of %g \n",currEtot*invN,WLD1min);
-
-	}
-	
-	ini_MD();
+		fprintf(stderr,"Relaxing:  %g of %g \n",currEtot*invN,WLD1min);
+	};*/
+	label = 0;
 	LOWESTE=currEtot*invN;
 }
 
+void freeWL(){
+	int i;
+	free(wlH);
+	free(wlHu);
+	free(wlHd);
+	free(wlHi);
+	free(wlHui);
+	free(wlHdi);
+	free(prof);
+	free(wllng);
+	free(wllngi);
+	free(mask);
+	free(attemptrot);
+	free(acceptrot);
+/*	free(cntMag);
+	for(i=0; i<sizeHistMag; i++){
+		free(histMag[i]);
+		free(histMag2[i]);
+		free(histMag4[i]);
+	}*/
+	free(Mavg);
+	free(Mavg2);
+	free(Mavg4);
 
+
+}
 //attempts to run one WL hybrid move per bin
-void sweepWL(double sweeps)
+void sweepWL(int sweeps)
 {
 	int i;
-      
+    double E;
 	for(i=0;i<sweeps;++i)
-    {
-		wlhybrid();
+   {
+		//wlhybrid();
+		Rot();
+
+		//	write_pos();
 	};
 }
 
@@ -880,19 +749,17 @@ void sweepWL(double sweeps)
 //excutes all of the combined MC moves, performs one step of each type of move, and one sweep of diffusion moves
 void wlhybrid(void)
 {
-	int i;
+	int i,j,k;
 
 
-	for(i=0;i<N;++i){
-//		DiffandRot(N);
-		Diff();
+	for(i=0;i<N*N;++i){
 		Rot();
-	}
-
-	Vol();
-
-//        MD();
-  // MPI_Barrier(MPI_COMM_WORLD);
+#ifdef VIR
+		Vol(); 
+#endif
+	} 
+//	Vol();
+//	MD();
 
 //    wlreptation();
 //	wlcutjoin();
@@ -900,190 +767,40 @@ void wlhybrid(void)
 	//wlrandpivot();
 	
 }
-int WangLandau(double Ei, double Ef, double dr, double tx, double ty, double tz, int flag){
-	int iti, fti, send,n,min, temp,dti, acpt;
-	double D1Valuei=Ei*invN;
-	double D1Valuef=Ef*invN;
+
+
+//routine to encapsulate the WangLandau algorithm, returns 1 if accepted and 0 if rejected
+int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
+{
+	int iti;//indices of initial config
+	int fti;//indices of final config
 	double lngi,lngf;  //values for the density of states, intial and final
 	double R;
-    double pf, pr, gi, gf;
-	
 
-	 iti=(int) ((D1Valuei-WLD1min)*invdWLD1);
-	 fti=(int) ((D1Valuef-WLD1min)*invdWLD1);
+	//Primary direction index
+//	iti=(int) ((Ei*invN-WLD1min)*invdWLD1);
+//	fti=(int) ((Ef*invN-WLD1min)*invdWLD1);
+	iti = (int)((Ei+2*N*N)/4);
+	fti = (int)((Ef+2*N*N)/4);
 
-   assert ( iti>=0 && iti < D1BINS);   
+	attemptrot[iti] += 1;
 
-	if(flag==1)
-		attemptdiff[iti] += 1;
-	else if(flag == 0)
-		attemptrot[iti] += 1;
-
-	//This statement simply prints out the lowest energy configuration
 	if(Ef*invN<LOWESTE)
 	{
-		writeinc(myrank,Ef*invN);
-		write_mol2(myrank, Wmol);
+	//	writeinc(0,Ef*invN);
+		write_mol2(0);
 		LOWESTE=Ef*invN;
 		//fprintf(stderr,"New Lowest E config %g\n\n",LOWESTE);
 	};
 
 
-	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
-	{
-		acpt = 0; 
-		send = iti;
-#ifdef GROUND
-		if(fti < 0){
-			acpt =1;
-			send = fti;
-			if(flag==1)
-				acceptdiff[iti] += 1;
-			else
-				acceptrot[iti] += 1;			
-		}
-#endif
-
-
-	}else{ // in bound;
-		lngi=wllng[iti];
-		lngf=wllng[fti];
-      
-		if(flag == 1){ 
-			pf = (Df[iti]/Df[fti]);
-			R=exp(lngi-lngf)*pf*pf*pf;
-		}else if(flag== 0){
-			pr = (Dr[iti]/Dr[fti]);
-			R=exp(lngi-lngf)*pr;
-		}else if (flag == -1){
-			R=exp( (lngi-lngf) + (dr - tx) );		
-		}else if(flag == -2){
-			R=exp(lngi-lngf - dr);				
-		}
-
-
-		if(randd1() < R ){
-			acpt = 1;
-			send =fti;
-			if(flag==1)
-				acceptdiff[iti] += 1;
-			else if(flag ==0)
-				acceptrot[iti] += 1;		
-		}
-		else{
-			acpt = 0;
-			send = iti;
-		}
-
-
-		if( (flag==1 && ( fabs(tx) >= Df[fti]  || fabs(ty) >= Df[fti]  || fabs(tz) >= Df[fti] ) )    || (flag==0 && fabs(dr)  >= Dr[fti] )  ){ //correct detail balance;
-			send = D1BINS;   //invalid move, no update;
-			acpt = 0;
-		}
-	}
-
-	MPI_Allgather(&send, 1, MPI_INTEGER, list, 1, MPI_INTEGER, MPI_COMM_WORLD);
-#ifdef GROUND
-		min=0;
-		for(n=0;n<nprocs;n++){
-			if(list[n] >=0 && list[n]<D1BINS){
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;			
-			}else{
-				if(min > list[n])
-					min=list[n];
-			}
-		}
-
-		if(min < 0){
-			extendg(-min);
-			wlH[0] +=1.0;
-			wllng[0] += lnwlf;
-		}
-
-#else
-	temp = tMC%dwl;
-	for(n=0;n<nprocs;n++){
-		if(list[n] < D1BINS){
-#ifdef DELAY
-			if(tMC >= dwl){
-
-				dti = Ed[temp][n];
-				Ed[temp][n] = list[n];
-				gi = wllng[dti];
-				gf = lnwd[temp][n];
-				lnwd[temp][n] = wllng[list[n]];
-				assert(gi >= gf);
-
-				wlH[dti] += 1.0;
-				wllng[dti] += lnwlf*exp(gf-gi);
-
-			}else{
-
-				Ed[tMC][n] = list[n];
-				lnwd[tMC][n] =  wllng[list[n]];
-
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;
-			}
-
-#else
-
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;
-#endif
-
-		}
-	
-	}
-#endif	
-	tMC ++;
-
-	if(acpt == 0)			//(send == iti || send == D1BINS) it's possible after update iti == fti;
-		return 0; 
-	else
-		return 1;
-
-}
-
-//routine to encapsulate the WangLandau algorithm, returns 1 if accepted and 0 if rejected
-int WangLandau_bc(double Ei, double Ef) //, double Enbi, double Enbf)
-{
-	int iti;//indices of initial config
-	int fti;//indices of final config
-	int n;
-
-	//short hand for energies
-	//initial
-	double D1Valuei=Ei*invN;
-	//double D1Valuei=(Ei-Efasti)*invN;
-//	double D2Valuei=Enbi*invN;
-	//final
-	double D1Valuef=Ef*invN;
-	//double D1Value=(Ef-Efastf)*invN;
-//	double D2Valuef=Enbf*invN;
-
-	double lngi,lngf;  //values for the density of states, intial and final
-	double R;
-
-	int * list = malloc(sizeof(int) * nprocs);
-	//Primary direction index
-	iti=(int) ((D1Valuei-WLD1min)*invdWLD1);
-	fti=(int) ((D1Valuef-WLD1min)*invdWLD1);
-
+//	if(lnwlf == 0.0078125 && iti == 50) 
+//		write_mol2(111, Wmol);
 	//fprintf(stderr,"%d\t%d\t%g\t%g\t%d\n",iti,fti,D1Valuei,D1Valuef,D1BINS);
 
 	//fprintf(stderr,"%d\t%d\t%g\t%g\t%g\n",iti,fti,D1Valuei,D1Valuef,Etot());
 	//fprintf(stderr,"%20.15f\t%20.15f\t%20.15f\t%20.15f\n",Ei*invN,Efasti*invN,Ef*invN,Efastf*invN);
-  
-	//This statement simply prints out the lowest energy configuration
-	if(Ef*invN<LOWESTE)
-	{
-		writeinc(0,Ef*invN);
-		write_mol2(0, Wmol);
-		LOWESTE=Ef*invN;
-		//fprintf(stderr,"New Lowest E config %g\n\n",LOWESTE);
-	};
+ 
 
 	//  fprintf(stderr,"%d,%d >> %d,%d\n",iti,itj,fti,ftj);
 
@@ -1098,286 +815,233 @@ int WangLandau_bc(double Ei, double Ef) //, double Enbi, double Enbf)
 			n = -fti ;
 			currEtot = Ef;
 			extendg(n);
-			MPI_Bcast(&D1BINS, 1,  MPI_INTEGER, myrank , MPI_COMM_WORLD);
-			MPI_Bcast(&WLD1min, 1,  MPI_DOUBLE, myrank , MPI_COMM_WORLD);
-			MPI_Bcast(wlH, n, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
-			memset(wlH, 0.0, sizeof(double)*D1BINS);
-			return 1;
+
+		if(flag==1)
+			acceptdiff[iti] += 1;
+		else
+			acceptrot[iti] += 1;			
 #else
 			if(ProductionRun == 0)
 			{
-				wlH[iti]+=1.0;
-				wllng[iti]+=lnwlf;
+#ifdef DELAY
+				if(tMC>=dwl){
+					temp = tMC%dwl;
+					dti = Ed[temp];
+					Ed[temp] = iti;
+					gi = wllngi[dti];
+					gf = lnwd[temp];
+					assert(gi >= gf);
+
+					wlHi[dti]+=1.0;
+					wllngi[dti]+=lnwlf*exp(gf-gi);
+
+					lnwd[temp] = wllngi[iti];
+				}else{
+					Ed[tMC] = iti;
+					lnwd[tMC] = wllngi[iti];
+
+					wlHi[iti]+=1.0;
+					wllngi[iti]+=lnwlf;				
+				}
+				
+					tMC++;
+#else
+					wlHi[iti]+=1.0;
+					if(label == 1)// last visit boundary is Emax;
+						wlHui[iti] += 1.0;
+					else// last visit boundary is Emin;
+						wlHdi[iti] += 1.0;
+
+					wllngi[iti]+=lnwlf*prof[iti];				
+#endif
 			}	  
 			else if(ProductionRun == 1)
 			{
-				wlH[iti]+=1.0;
-				histfill_prun(iti);
-				wllng[iti]+=lnwlf;
+				Mag(iti);
+				wlHi[iti]+=1.0;
+				wllngi[iti]+=lnwlf;
 			};
 #endif
 		}
 		else
 		{
-/*			if(ProductionRun == 0)
+			if(ProductionRun == 0)
 			{
-				wlH[iti]+=1.0;
-				wllng[iti]+=lnwlf;
+#ifdef DELAY
+			if(tMC>=dwl){
+					temp = tMC%dwl;
+					dti = Ed[temp];
+					Ed[temp] = iti;
+					gi = wllngi[dti];
+					gf = lnwd[temp];
+					assert(gi >= gf);
+
+					wlHi[dti]+=1.0;
+					wllngi[dti]+=lnwlf*exp(gf-gi);
+
+					lnwd[temp] = wllngi[iti];
+				}else{
+					wlHi[iti]+=1.0;
+					wllngi[iti]+=lnwlf;		
+
+					Ed[tMC] = iti;
+					lnwd[tMC] = wllngi[iti];
+				}
+				
+					tMC++;
+#else
+					wlHi[iti]+=1.0;
+					if(label == 1)// last visit boundary is Emax;
+						wlHui[iti] += 1.0;
+					else// last visit boundary is Emin;
+						wlHdi[iti] += 1.0;
+					wllngi[iti]+=lnwlf*prof[iti];		
+
+#endif
 			}	  
 			else if(ProductionRun == 1)
 			{
-				wlH[iti]+=1.0;
-				histfill_prun(iti);
-				wllng[iti]+=lnwlf;
+				Mag(iti);
+				wlHi[iti]+=1.0;
+				wllngi[iti]+=lnwlf;
 			};
 		}
-*/
-		//combining the info from all the walkers;
-			MPI_Allgather(&iti, 1, MPI_INTEGER, list, 1, MPI_INTEGER, MPI_COMM_WORLD);
-			for(n=0;n<nprocs;n++){
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;
-			}
-			free(list);
-	//	MPI_Bcast(&wlH[iti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
-	//	MPI_Bcast(&wllng[iti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
 		return 0;
 
-		}
-	}
+    }
 	else
     {
 		//inside of bounds
-		lngi=wllng[iti];
-		lngf=wllng[fti];
-      
-		R=exp(lngi-lngf);
 
+#ifdef Adaptive
+			if(fti > iti){
+				if(flag==1){
+					Df[iti] *=  (1-2*epsilon);
+				}
+				else if(flag==0){
+					Dr[iti] *= (1-2*epsilon);
+				}
+			}else if( fti < iti)
+			{
+				if(flag==1){
+				
+					if(Df[iti] < DfBound)
+						Df[iti] *= (1+epsilon);
+				}else if(flag==0){
+					if(Dr[iti] < DrBound)
+						Dr[iti] *= (1+epsilon);
+				}
+			}
+#endif
+
+
+		lngi=wllngi[iti]+wllng[iti];
+		lngf=wllngi[fti]+wllng[fti];
+      	R=exp(lngi-lngf);
 		if(randd1()<R)
 		{
 			//accept
-			currEtot=Ef;
-//			currnonbondE=Enbf;
+			if(fti == 0)
+				label = 0;
+			if(fti == D1BINS-1)
+				label = 1;
 
-/*			if(ProductionRun == 0)
+			acceptrot[iti] += 1;
+
+			if(ProductionRun == 0)
 			{	
-				wlH[fti]+=1.0;
-				wllng[fti]+=lnwlf;
+#ifdef DELAY
+				if(tMC>=dwl){
+					temp = tMC%dwl;
+					dti = Ed[temp];
+					Ed[temp] = fti;
+					gi = wllngi[dti];
+					gf = lnwd[temp];
+					assert(gi >= gf);
+
+					wlHi[dti]+=1.0;
+					wllngi[dti]+=lnwlf*exp(gf-gi);
+
+					lnwd[temp] = wllngi[fti];
+
+				}else{
+					wlHi[fti]+=1.0;
+					wllngi[fti]+=lnwlf;		
+
+					Ed[tMC] = fti;
+					lnwd[tMC] = wllngi[fti];		
+				}
+				
+					tMC++;
+#else
+					wlHi[fti]+=1.0;
+					if(label == 1)// last visit boundary is Emax;
+						wlHui[iti] += 1.0;
+					else// last visit boundary is Emin;
+						wlHdi[iti] += 1.0;
+					
+					wllngi[fti]+=lnwlf*prof[fti];		
+#endif
 			}
 			else if(ProductionRun == 1)
 			{
-				wlH[fti]+=1.0;
-				histfill_prun(fti);
-				wllng[fti]+=lnwlf;
+				Mag(fti);
+				wlHi[fti]+=1.0;
+				wllngi[fti]+=lnwlf;
 			};
-	*/	
-			//combining the info from all the walkers;
-			MPI_Allgather(&fti, 1, MPI_INTEGER, list, 1, MPI_INTEGER, MPI_COMM_WORLD);
-			for(n=0;n<nprocs;n++){
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;
-			}
-			free(list);
-
-		//	MPI_Bcast(&wlH[fti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
-		//	MPI_Bcast(&wllng[fti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
+		
 			return 1;
 		}
 		else
 		{
 			//reject
-/*			if(ProductionRun == 0)
+			if(ProductionRun == 0)
 			{
-				wlH[iti]+=1.0;
-				wllng[iti]+=lnwlf;
+#ifdef DELAY
+				if(tMC>=dwl){
+					temp = tMC%dwl;
+					dti = Ed[temp];
+					Ed[temp] = iti;
+					gi = wllngi[dti];
+					gf = lnwd[temp];
+					assert(gi >= gf);
+
+					wlHi[dti]+=1.0;
+					wllngi[dti]+=lnwlf*exp(gf-gi);
+
+					lnwd[temp] = wllngi[iti];
+				}else{
+					wlHi[iti]+=1.0;
+					wllngi[iti]+=lnwlf;		
+
+					Ed[tMC] = iti;
+					lnwd[tMC] = wllngi[iti];		
+				}
+				
+					tMC++;
+#else
+					wlHi[iti]+=1.0;
+					if(label == 1)// last visit boundary is Emax;
+						wlHui[iti] += 1.0;
+					else// last visit boundary is Emin;
+						wlHdi[iti] += 1.0;
+
+					wllngi[iti]+=lnwlf*prof[iti];	
+#endif
 			}
 			else if(ProductionRun == 1)
 			{
-				wlH[iti]+=1.0;
-				histfill_prun(iti);
-				wllng[iti]+=lnwlf;
+				Mag(iti);
+				wlHi[iti]+=1.0;
+				wllngi[iti]+=lnwlf;
 			};
-	*/		//combining the info from all the walkers;
-			MPI_Allgather(&iti, 1, MPI_INTEGER, list, 1, MPI_INTEGER, MPI_COMM_WORLD);
-			for(n=0;n<nprocs;n++){
-				wlH[list[n]] +=1.0;
-				wllng[list[n]] += lnwlf;
-			}
-			free(list);
-
-		//	MPI_Bcast(&wlH[iti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
-		//	MPI_Bcast(&wllng[iti], 1, MPI_DOUBLE, myrank, MPI_COMM_WORLD);
+				  
 			return 0;
 		};
     };
 
 }
 
-void seqMC(){
-	int mcs;
-	int i=0;
-	struct Water WmolOld; 
-    double Ei=0.0,Ef=0.0; //intial and final energies (before and after diffusion)
-    int j, axis,flag;
-	double XMsum,YMsum,ZMsum,Msum,xc,yc,zc,temp1,temp2,tx,ty,tz;
-	double cosD,sinD,dtheta;
-	double rand;
-	for(mcs=0;mcs<N;mcs++){
-		//randomly choose a monomer
-		i=(int) (randd1()*N);
-		
-		//Set initial energies
-		Ei=currEtot;
-
-		//diffuse the ith monomer
-		WmolOld=Wmol[i];
-
-		if(randd1() < ProbD){// Diffusion;
-			flag =1;
-			tx = DD*(2.0*randd1()-1.0);
-			ty = DD*(2.0*randd1()-1.0);
-			tz = DD*(2.0*randd1()-1.0);
-			
-
-			Wmol[i].Ox += tx;
-			Wmol[i].Oy += ty;
-			Wmol[i].Oz += tz;
-
-			Wmol[i].H1x += tx;
-			Wmol[i].H1y += ty;
-			Wmol[i].H1z += tz;
-
-			Wmol[i].H2x += tx;
-			Wmol[i].H2y += ty;
-			Wmol[i].H2z += tz;
-
-			Wmol[i].cx += tx;
-			Wmol[i].cy += ty;
-			Wmol[i].cz += tz;
-
-		}
-		else{	// Rotation trial about center of mass;
-			flag = 0;
-			xc = Wmol[i].cx;
-			yc = Wmol[i].cy;
-			zc = Wmol[i].cz;
-
-
-			dtheta=(2.0*randd1()-1.0)*D;
-			cosD = cos(dtheta);
-			sinD = sin(dtheta);
-
-			axis =  (int)(3.0*randd1() )+1;
-			switch(axis){
-				case(1): // y-z plane;
-					ty = Wmol[i].Oy - yc;
-					tz = Wmol[i].Oz - zc;
-					temp1= cosD*ty-sinD*tz;
-					temp2 = sinD*ty+cosD*tz;
-					Wmol[i].Oy = temp1 + yc;
-					Wmol[i].Oz = temp2 + zc;
-
-					ty = Wmol[i].H1y - yc;
-					tz = Wmol[i].H1z - zc;
-					temp1= cosD*ty-sinD*tz;
-					temp2 = sinD*ty+cosD*tz;
-					Wmol[i].H1y = temp1 + yc;
-					Wmol[i].H1z = temp2 + zc;
-
-					ty = Wmol[i].H2y - yc;
-					tz = Wmol[i].H2z - zc;
-					temp1= cosD*ty-sinD*tz;
-					temp2 = sinD*ty+cosD*tz;
-					Wmol[i].H2y = temp1 + yc;
-					Wmol[i].H2z = temp2 + zc;
-					break;
-				case(2): // x-z plane
-					tz = Wmol[i].Oz - zc;
-					tx = Wmol[i].Ox - xc;
-					temp1= cosD*tz-sinD*tx;
-					temp2 = sinD*tz+cosD*tx;
-					Wmol[i].Oz = temp1 + zc;
-					Wmol[i].Ox = temp2 + xc;
-
-					tz = Wmol[i].H1z - zc;
-					tx = Wmol[i].H1x - xc;
-					temp1= cosD*tz-sinD*tx;
-					temp2 = sinD*tz+cosD*tx;
-					Wmol[i].H1z = temp1 + zc;
-					Wmol[i].H1x = temp2 + xc;
-
-					tz = Wmol[i].H2z - zc;
-					tx = Wmol[i].H2x - xc;
-					temp1= cosD*tz-sinD*tx;
-					temp2 = sinD*tz+cosD*tx;
-					Wmol[i].H2z = temp1 + zc;
-					Wmol[i].H2x = temp2 + xc;
-					break;
-				case(3): // x-y plane;
-					tx = Wmol[i].Ox - xc;
-					ty = Wmol[i].Oy- yc;
-					temp1= cosD*tx-sinD*ty;
-					temp2 = sinD*tx+cosD*ty;
-					Wmol[i].Ox = temp1 + xc;
-					Wmol[i].Oy = temp2 + yc;
-
-					tx = Wmol[i].H1x - xc;
-					ty = Wmol[i].H1y- yc;
-					temp1= cosD*tx-sinD*ty;
-					temp2 = sinD*tx+cosD*ty;
-					Wmol[i].H1x = temp1 + xc;
-					Wmol[i].H1y = temp2 + yc;
-
-					tx = Wmol[i].H2x - xc;
-					ty = Wmol[i].H2y- yc;
-					temp1= cosD*tx-sinD*ty;
-					temp2 = sinD*tx+cosD*ty;
-					Wmol[i].H2x = temp1 + xc;
-					Wmol[i].H2y = temp2 + yc;
-					break;
-			};
-
-		};
-		//Calculate the final energy
-		if(constrain(i, flag)==1){
-				Ef=Eupdate(i,Wmol) +Ei;
-			  
-				if(Metropolis(Ei,Ef,-1)==1)
-				{
-					currEtot = Ef;
-
-					for(j=0;j<N;j++){
-						if(j!=i){
-							Epold[i][j]=Epold[j][i]=Ep[i][j];
-						}
-					}
-
-				}
-				else
-				{
-					//reject - return monomer to old position
-					Wmol[i]=WmolOld;
-					currEtot = Ei;
-
-					for(j=0;j<N;j++){
-						if(j!=i){
-							Ep[i][j]=Ep[j][i]=Epold[i][j];
-						}
-					}
-				};			
-		}else{
-					//reject - return monomer to old position
-					Wmol[i]=WmolOld;
-					currEtot = Ei;	
-
-					for(j=0;j<N;j++){
-						if(j!=i){
-							Ep[i][j]=Ep[j][i]=Epold[i][j];
-						}
-					}
-		}
-	}
-}
 
 /*
 //////////  Wang-Landau Diffusion Move  //////////
