@@ -4,6 +4,7 @@
 #include <string.h>
 #include "parameter.hpp"
 #include "alloy.hpp"
+#include "pt.hpp"
 #include "wanglandau.hpp"
 
 

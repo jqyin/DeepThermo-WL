@@ -7,7 +7,7 @@ relax_dir = relax
 hist_dir = hist
 objs = \
 	rand.o parameter.o \
-	alloy.o wanglandau.o \
+	alloy.o wanglandau.o pt.o \
 	main.o 
 
 relax_objs = $(addprefix $(relax_dir)/, $(objs))
