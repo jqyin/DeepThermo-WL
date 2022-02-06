@@ -1,6 +1,6 @@
 CC = mpic++
 TF_DIR = /sw/summit/open-ce/anaconda-base/envs/open-ce-1.2.0-py38-0
-Flag = -O3 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++11
+Flag = -O0 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++11
 LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so
 MFlag ?= -DModel_Small
 relax_dir = relax

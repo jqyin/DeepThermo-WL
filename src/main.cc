@@ -34,14 +34,31 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[4])*myrank);
 	shelltimeseed(rand()+19*myrank+19273);
 
+        //start tensorflow session;
+        std::string model_dir;
+        SessionOptions options;
+        options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%6));
+        for(i=1; i<=NE; i++){
+            model_dir = "./models/exported/fp16/small/MoNbTaW/"+std::string(element[i])+"/model_"+std::string(element[i]);
+            models[i-1].LoadModel(model_dir, options);
+        }
+
 	//Error message if the number of arguments is incorrect
 	if (argc != 3 && myrank == 0) ErrorMsg(0, "");
 
 	//Reads Input Parameters
 	ReadInput(argv[1]);
-  
   	//Initializes the System
+	ini_T(MTi,MTf,nT);
 	ini_sys();
+
+        if(myrank == 0)
+            ini_alloy(0);
+        MPI_Bcast(Atom, N_3, MPI_SHORT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(NT, NE, MPI_INT, 0, MPI_COMM_WORLD);
+        ini_apos();
+        currEtot = Etot();
+	printf("Etot = %g\n", currEtot);
 
 	//Initialize the Wang-Landau sampling parameters
 	initWL();

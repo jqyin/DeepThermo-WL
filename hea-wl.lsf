@@ -21,6 +21,6 @@ NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch |
 
 #ssh $head nvidia-smi stats -d gpuUtil,memUtil -f $(pwd)/log.gpu.n${NODES}.${LSB_JOBID} &
 
-jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed ./hea-wl ptrun3D.input 123
+jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed ./hea-wl wlrun1D.input 123
 
 #jskill all

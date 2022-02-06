@@ -2,159 +2,207 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <set>
 
 #define  DEFINE_GLOBALS
+#include "model.hpp"
 #include "alloy.hpp"
-#include "pt.hpp"
 #include "rand.hpp"
+#include "pt.hpp"
 #include "wanglandau.hpp"
 
 extern int myrank, nprocs;
-
-void initialize(int state){
+void initialize(){
 
 	//maximum rotational angle;
 	D=1.0*Pi; DD = 0.2;
-
 	attd=accd=0;
 
 	//initialize spin configuration;
-	ini_conf(state);
+	//ini_conf(state);
+
 	ini_coupling();
-	ini_alloy();
 //	write_mol2(-1);
 	invN=1.0/(N*N*N);
 	
-
 }
 
 void ini_coupling(){
-	int i,j,k, shell, ti, tj;
-	double tmp, Jr;
+	int i,j,k,ii,cnt,shell,ti[NE*(NE-1)/2 + NE], tj[NE*(NE-1)/2 + NE],x,y,z;
+	double r, Jr[NE*(NE-1)/2 + NE],Jrold;
 	FILE* fop;
-	for(i=0; i<5; i++)
-		for(j=0; j<5; j++)
-			for(k=0; k<15; k++)
-				J[i][j][k] = 1.0;
+	for(i=0; i<NE; i++)
+		for(j=0; j<NE; j++)
+			for(k=0; k<SH; k++)
+				J[i][j][k] = 0.0;
 
-	NS[0] = 12; NS[1] = 6;
-	NS[2] = 24; NS[3] = 12;
-	NS[4] = 24; NS[5] = 8;
-	NS[6] = 48; NS[7] = 6;
-	NS[8] = 36; NS[9] = 24;
 // read from input file;
-	fop = fopen("source_code/data/J.dat","r");
-   if(fop==NULL){
-			printf("Jfit.dat file was not opened\n");
-			exit(1);
-   }
-	for(i=0;i<150; i++) // 10 shell, each with 15 J;
-    {
-		fscanf(fop,"%d %lg %d %d %lg\n",&shell, &tmp, &ti, &tj, &Jr);
-		J[ti-1][tj-1][shell-1] = 2*Jr;
-		J[tj-1][ti-1][shell-1] = 2*Jr;
-    };
+	fop = fopen("coupling.input","r");
+        if(fop==NULL){
+		printf("coupling.input file was not opened\n");
+		exit(1);
+        }
+	//for(i=0;i<100; i++) // 10 shell, each with 10 J;
+	shell = 0; Nneighbors=0; Dist[0] = 0.0;
+	while( shell < SH)
+        {
+		fscanf(fop, "%lg", &r);
+	//	for(i=0;i<(NE*(NE-1)/2 + NE);i++){
+			i=0;
+			fscanf(fop, "%lg %d %d", &Jr[i], &ti[i], &tj[i]);
+	//	}
+		fscanf(fop, "%d %d %d\n", &x, &y, &z);
+		  
+		if(Nneighbors == 0){
+			Jrold = Jr[0];
+		}else{
+			// shell by coupling 
+			//if(fabs(Jrold -Jr[0]) > 1e-10){
+			// shell by distance
+			if(fabs(r- Dist[shell]) > 1e-6){
+				shell++;
+				Jrold = Jr[0];
+				if(shell == SH) break;
+			}
+		}
+		nlist[Nneighbors].x = x;
+		nlist[Nneighbors].y = y;
+		nlist[Nneighbors].z = z;
+	//	for(i=0;i<(NE*(NE-1)/2 + NE);i++)
+			i = 0; 
+			J[ti[i]-1][tj[i]-1][shell]=J[tj[i]-1][ti[i]-1][shell]= 2*Jr[i];
+		Dist[shell] = r;  
+		NS[shell]++; // number of neighbors within each shell
+		Nneighbors++; // total number of neighbors
+		
+        };
 
 	fclose(fop);	
+
+	if(myrank==0){
+		for(i=0;i<SH;i++)
+			fprintf(stderr,"%d\t%d\t%lf\t%lf\n",i,NS[i],Dist[i],J[0][0][i]);
+	}
+	inputPos = (int**)malloc(sizeof(int*)*N_3); 
+	for(i=0; i<N_3; i++){
+		inputPos[i] = (int*)malloc(sizeof(int)*Nneighbors);
+	}
 
 
 }
 
-void ini_alloy(){
+void shuffle(int *array, size_t n)
+{
+        size_t i;
+        for (i = n-1; i > 0; i--) 
+        {
+          size_t j = rand() % (i+1);
+          int t = array[j];
+          array[j] = array[i];
+          array[i] = t;
+        }
+}
 
-	int i,j,k,t,t2,N5;
-	int cnt[5] = {0};
+void ini_apos(){
+	int idx, i, j, k, x, y, z, cnt, ii, shell;
+	int nn[MAX_NEIGHBORS*3], cntt;  
+
+// generate neighbor list for neural network inputsa
+	for(i=0; i<N; i++)for(j=0; j<N; j++)for(k=0; k<N; k++){
+		neighbor(i,j,k,nn);
+		cnt = cntt = 0; 
+		idx = i*N_2+j*N+k;
+		for(shell =0; shell < SH; shell++)
+			for(ii=0;ii<NS[shell];ii++){
+				x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
+				inputPos[idx][cntt++] = x*N_2+y*N+z;
+		}			
+	} 
+	
+}
+void ini_alloy(int state){
+
+	int i,j,k,t,t2,Ni,ii,shell,x,y,z;
+	int cnt,cnti,cntt[NE];
+	double p;
+	int * list = (int*) malloc(sizeof(int)*N*N*N);
 // initialize alloy atom species with equal probabilities.
-	N5 = N*N*N/5;
+	FILE* fop = fopen("composition.input","r");
+        if(fop==NULL){
+		printf("composition.input file was not opened\n");
+		exit(1);
+        }
+	cnt = 0;
+	for(t=0;t<NE;t++){
+		fscanf(fop, "%lg", &p); 
+		Ni = (int)(N*N*N*p);
+		cnti=0;
+		while(cnti < Ni){
+			list[cnt++] = t;
+			cnti++;
+		}
+		NT[t] = 0;
+	}
+	while(cnt < N*N*N){
+		t = (int)(randd1()*NE);
+		list[cnt++] = t;
+	}
+        if(state == 0)
+		shuffle(list, N*N*N);
+	cnt = 0;	
 	for(i=0; i<N; i++)
 		for(j=0; j<N; j++)
 			for(k=0; k<N; k++){		
-				t = (int)(randd1()*5);
-				Type[i*N_2+j*N+k] = t;
-				cnt[t]++;
-			}
-		for(t = 0 ; t < 5; t++){
-			while(cnt[t] > N5){
+				//t = (int)(randd1()*NE);
+				t = list[cnt++];
+				Atom[i*N_2+j*N+k] = t;
+				//cnt[t]++;
+				NT[t]++;
+	}
+	free(list);
+        fclose(fop);
+	for(t = 0 ; t < NE; t++)
+		fprintf(stderr, "%s:%d\n",element[t+1],NT[t]);
+
+
+
+/*	for(t = 0 ; t < NE; t++){
+			while(cnt[t] > Ni[t]){
 
 				do{
 					i = (int) (randd1()*N);
 					j = (int) (randd1()*N);
 					k = (int)(randd1()*N);	
-				}while(Type[i*N_2+j*N+k] != t);
+				}while(Atom[i*N_2+j*N+k] != t);
 
 				do{
-					t2 = (int)(randd1()*5);
+					t2 = (int)(randd1()*NE);
 				}while(t2 <= t);
-				Type[i*N_2+j*N+k] = t2;
+				Atom[i*N_2+j*N+k] = t2;
 
 				cnt[t]--;
 				cnt[t2]++;
 			}
 
-			while(cnt[t] < N5){
+			while(cnt[t] < Ni[t]){
 
 				do{
 					i = (int) (randd1()*N);
 					j = (int) (randd1()*N);
 					k = (int)(randd1()*N);	
-				}while(Type[i*N_2+j*N+k] <= t);
-				t2 = Type[i*N_2+j*N+k]; 				
-				Type[i*N_2+j*N+k] = t;
+				}while(Atom[i*N_2+j*N+k] <= t);
+				t2 = Atom[i*N_2+j*N+k]; 				
+				Atom[i*N_2+j*N+k] = t;
 
 				cnt[t]++;
 				cnt[t2]--;
 			}
 		}
-	assert(cnt[0] == N5);assert(cnt[1] == N5);assert(cnt[2] == N5);assert(cnt[3] == N5);		
+	for(t=0;t<NE;t++)
+		assert(cnt[t] == Ni[t]);*/
 /////////////////////////////////////////
 }
 
-void ini_conf(int state){
-	
-	int i,j,k,t,t2,N4;
-	double eta1,eta2,etasq;
-	double x, y,z;
-
-
-	if(state==ORDER)
-	{
-// ordered initial state;ordered initial postion;
-		for(i=0; i<N; i++)
-			for(j=0; j<N; j++)
-				for(k=0; k<N; k++){
-					S[i*N_2+j*N+k] = 1;
-					S[N_3+i*N_2+j*N+k] = 0;
-					S[2*N_3+i*N_2+j*N+k] = 0;
-
-				}
-
-	}
-	else
-	{
-//disordered inital state;  
-		for(i=0; i<N; i++)
-			for(j=0; j<N; j++)
-				for(k=0; k<N; k++){
-			
-				   do{
-						eta1 = 1.0 - 2.0*randd1();
-						eta2 = 1.0 - 2.0*randd1();
-						etasq = eta1*eta1 + eta2*eta2;
-				   }while(etasq >1.0);
-					//these are the new unit vectors
-					x = 2.0*eta1*sqrt(1.0-etasq);
-					y = 2.0*eta2*sqrt(1.0-etasq);
-					z = 1.0 - 2.0*etasq;				
-
-					S[i*N_2+j*N+k] = x;
-					S[N_3+i*N_2+j*N+k] = y;
-					S[2*N_3+i*N_2+j*N+k] = z;
-
-			}
-	
-	}
-	
-}
 inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, int cnt){
 	int si, sj,sk;
 	si = i + offi;
@@ -168,7 +216,7 @@ inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, i
 	if(sk >= N) sk -= N;
 	nn[cnt++] = si; nn[cnt++] = sj; nn[cnt++] =sk;
 	
-	si = i - offi;
+/*	si = i - offi;
 	if(si < 0) si += N;
 	if(si >= N) si -= N;
 	sj = j - offj;
@@ -178,338 +226,241 @@ inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, i
 	if(sk < 0) sk += N;
 	if(sk >= N) sk -= N;
 	nn[cnt++] = si; nn[cnt++] = sj; nn[cnt++] =sk;
-}
-inline void  neighbor(int i, int j, int k, int* nn){
-	int ii, jj, kk, cnt=0;
-// 1st 12;
-	noffset(i,j,k,1,0,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,1,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,0,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-1,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,0,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,1,-1, nn, cnt); cnt+=6;
-//2nd 6;
-	noffset(i,j,k,1,1,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-1,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,1,1, nn, cnt); cnt+=6;
-//3rd 24;
-	noffset(i,j,k,1,1,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,1,0,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,1,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,1,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-2,1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-2,1,1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,-1,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,0,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,2,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-1,2,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,0,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,-1,2, nn, cnt); cnt+=6;	
-//4th 12
-	noffset(i,j,k,2,0,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,2,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,0,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,2,-2,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,0,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,2,-2, nn, cnt); cnt+=6;	
-// 5th 24
-	noffset(i,j,k,2,-1,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,2,1,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,2,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-1,2,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-1,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,1,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,-2,1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,1,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-2,2,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,2,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-2,1,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-2,2, nn, cnt); cnt+=6;	
-// 6th 8
-	noffset(i,j,k,1,1,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,-1,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,3,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,-1,3, nn, cnt); cnt+=6;
-// 7th 48
-	noffset(i,j,k,2,1,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,2,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,0,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,0,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,2,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,1,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,-2,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,0,-2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-2,3,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,3,-2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-2,0,3, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,-2,3, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,-1,-2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,-2,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,3,-2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-2,3,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,-2,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,-2,-1,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,-1,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,0,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-1,3,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,3,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-1,0,3, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,-1,3, nn, cnt); cnt+=6;
-// 8th 6
-	noffset(i,j,k,2,-2,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,2,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-2,2,2, nn, cnt); cnt+=6;	
-// 9th 36
-/*	noffset(i,j,k,2,2,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,2,-1,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,2,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,-2,1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,1,-2, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,3,-2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,-2,3,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-2,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,-2,1,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,2,2,-3, nn, cnt); cnt+=6;
-	noffset(i,j,k,2,-3,2, nn, cnt); cnt+=6;
-	noffset(i,j,k,-3,2,2, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,0,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,3,0, nn, cnt); cnt+=6;
-	noffset(i,j,k,0,0,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,-3,0, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,0,-3, nn, cnt); cnt+=6;	
-	noffset(i,j,k,0,3,-3, nn, cnt); cnt+=6;	
-// 10th 24
-	noffset(i,j,k,3,1,-1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,-1,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,3,-1, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,3,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-1,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,-1,1,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,3,-3,1, nn, cnt); cnt+=6;	
-	noffset(i,j,k,3,1,-3, nn, cnt); cnt+=6;
-	noffset(i,j,k,-3,3,1, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,3,-3, nn, cnt); cnt+=6;
-	noffset(i,j,k,-3,1,3, nn, cnt); cnt+=6;
-	noffset(i,j,k,1,-3,3, nn, cnt); cnt+=6;	*/
+*/}
+void  neighbor(int i, int j, int k, int* nn){
+	int ii,cnt=0;
+	for(ii=0;ii<Nneighbors;ii++){
+		noffset(i,j,k,nlist[ii].x,nlist[ii].y,nlist[ii].z,nn,cnt);
+		cnt += 3;
+	}
 }
 
 double Etot(){
-	int i,j,k;
-	double E = 0.0;
+	double E;
+	E = 0.0;
 
-	for(i=0; i<N; i++)
-		for(j=0; j<N; j++)
-			for(k=0; k<N; k++)
-				E += 0.5*Esite(i,j,k);
-
-		return E;
+	#pragma omp parallel for reduction(+: E) num_threads(NE)
+	for(int t = 0; t < NE; t++){
+		tensorflow::TensorShape data_shape({NT[t], Nneighbors*(NE-1)});
+        	tensorflow::Tensor data(tensorflow::DT_UINT8, data_shape);
+        	auto data_ = data.flat<std::uint8_t>().data();
+                int cnt=0;
+		for(int i=0; i<N_3; i++){
+			if(Atom[i] == t){
+				for(int j = 0; j < Nneighbors; j++){//num of neighbors  
+					for(int k=0; k<NE-1; k++){//num of representation 
+                                                //printf("i%d,j%d,input%d\n",i,j,inputPos[i][j]);
+						data_[cnt++] = encode[Atom[inputPos[i][j]]][k]; 
+                                        }
+				}
+			}
+		}
+		std::vector<tensorflow::Tensor> outputs;
+                models[t].Predict(data, outputs);
+		for(int i = 0; i < NT[t]; i++){	
+			E += outputs[0].flat<float>().data()[i];
+		}
+	}
+	return E; 
 
 }
-
+/*
 double Esite(int i, int j, int k){
 
 	int ii,cnt,ti,tj,x,y,z, shell;
 	double sx, sy, sz;
-	double E = 0.0;
-	int nn[600]; // 10 shells contains 200 neighbors for fcc; 
+	double Elocal = 0.0;
+	int nn[MAX_NEIGHBORS*3]; // 10 shells contains 200 neighbors for fcc; 
 
+	ti = Atom[i*N_2+j*N+k];
 
-		sx = S[i*N_2+j*N+k] ; 
-		sy = S[N_3+i*N_2+j*N+k] ; 
-		sz = S[2*N_3+i*N_2+j*N+k] ; 
+	neighbor(i,j,k,nn);
+	cnt = 0; 
+	for(shell =0; shell < SH; shell++){
+		for(ii=0;ii<NS[shell];ii++){
+			x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
+			tj = Atom[x*N_2+y*N+z];
+		}
+	}
+	
+	tensorflow::TensorShape data_shape({1, 6});
+        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+        
+        auto data_ = data.flat<float>().data();
+        data_[0] = 0;
+	data_[1] = 0;
+  	data_[2] = 1;
+  	data_[3] = 1;
+  	data_[4] = 0;
+  	data_[5] = 0;
 
-		ti = Type[i*N_2+j*N+k];
+	tensor_dict feed_dict = {
+      		{"input_liz:0", data},
+  	};
+	std::vector<tensorflow::Tensor> outputs;
+	TF_CHECK_OK(
+		sess->Run(feed_dict, {"sequential/BiasAdd_2:0"}, {}, &outputs));
+	Elocal = outputs[0].flat<float>().data()[0];
+
+        //std::cout<< Elocal << std::endl; 
+	return Elocal;
+}*/
+/*
+void wolff(int i, int j, int k, double rx, double ry, double rz){
+
+	double sx,sy,sz,pi,pj, delta;
+	int ti,tj, cnt, ii, shell, x, y, z, nn[MAX_NEIGHBORS*3];
+
+	cluster[i*N_2+j*N+k] = true;
+	sx = S[i*N_2+j*N+k];
+	sy = S[N_3+i*N_2+j*N+k];
+	sz = S[2*N_3+i*N_2+j*N+k];
+	pi = (sx*rx + sy*ry + sz*rz);
+	ti = Atom[i*N_2+j*N+k];
+
+	S[i*N_2+j*N+k] = sx - 2*pi*rx;
+	S[N_3+i*N_2+j*N+k] = sy - 2*pi*ry;
+	S[2*N_3+i*N_2+j*N+k] = sz - 2*pi*rz;
 
 		neighbor(i,j,k,nn);
 		cnt = 0; 
 		for(shell =0; shell < SH; shell++){
 			for(ii=0;ii<NS[shell];ii++){
 				x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-				tj = Type[x*N_2+y*N+z];
-				E += -J[ti][tj][shell]*( sx*S[x*N_2+y*N+z]
-					  +sy*S[N_3+x*N_2+y*N+z]
-					  +sz*S[2*N_3+x*N_2+y*N+z] );
+				if(!cluster[x*N_2+y*N+z]){
+					tj = Atom[x*N_2+y*N+z];
+					pj = (S[x*N_2+y*N+z]*rx + S[N_3+x*N_2+y*N+z]*ry + S[2*N_3+x*N_2+y*N+z]*rz);
+					delta = -2*J[ti][tj][shell]/(T_scale*pT)*pi*pj;
+					if(delta < 0 && randd1() < (1-exp(delta)) )	
+						wolff(x,y,z,rx,ry,rz);
+				}
 			}
 		}
-
-
-		return E;
 }
-
-
+*/
 void Rot(){
-	int i, j, k, x, y, z, ii, jj, kk;
-	double dr, eta1, eta2, etasq, deltaE, E1, E2;
-	double rx, ry, rz, c, s, u, sx,sy,sz,im,jm;
-	double drx, dry, drz, J;
+	int i, j, k, x, y, z, ii, jj, kk, n, it, shell;
+	int ai, aj, cnt, cntE; 
+	double deltaE, dE, E1, E2;
+        //int nn[MAX_NEIGHBORS*3];
 
-//	for(i=0; i<N; i++)
-//		for(j=0; j<N; j++)
-//			for(k=0; k<N; k++){ 
-		i = (int) (randd1()*N);
-		j = (int) (randd1()*N);
-		k = (int)(randd1()*N);				
-			   dr=(2.0*randd1()-1.0)*D;
-			   do{
-					eta1 = 1.0 - 2.0*randd1();
-					eta2 = 1.0 - 2.0*randd1();
-					etasq = eta1*eta1 + eta2*eta2;
-			   }while(etasq >1.0);
-				//these are the new unit vectors
-				rx = 2.0*eta1*sqrt(1.0-etasq);
-				ry = 2.0*eta2*sqrt(1.0-etasq);
-				rz = 1.0 - 2.0*etasq;
+	i = (int) (randd1()*N_3);
+	n = (int) (randd1()*NS[0]);
+	//neighbor(i/N_2,(i/N)%N,i%N,nn);			
+        //x = nn[n*3]; y = nn[n*3+1]; z = nn[n*3+2];
+	//j = x*N_2+y*N+z;
+	j = inputPos[i][n];	
+	E1 = currEtot;
+	ai = Atom[i];
+	aj = Atom[j];
+	Atom[i] = aj;
+	Atom[j] = ai;	
+	E2 = Etot();
 
-				//angle constants
-		//		c=cos(dr);
-		//		s=sin(dr);
-		//		u=1.0-c;		  
-		
-				sx = S[i*N_2+j*N+k];
-				sy = S[N_3+i*N_2+j*N+k];
-				sz = S[2*N_3+i*N_2+j*N+k];
-
-				E1 = Esite(i,j,k);
-				//Perform the rotation on the selected spin
-				S[i*N_2+j*N+k] = rx; //(u*rx*rx + c)*sx     + (u*ry*rx - s*rz)*sy  + (u*rz*rx + ry*s)*sz ;
-				S[N_3+i*N_2+j*N+k] = ry; //(u*rx*ry + rz*s)*sx  + (u*ry*ry + c)*sy     + (u*rz*ry - rx*s)*sz ;
-				S[2*N_3+i*N_2+j*N+k] = rz; //(u*rx*rz - ry*s)*sx  + (u*ry*rz + rx*s)*sy  + (u*rz*rz + c)*sz ;	
-
-				//evaluate energy change
-				E2 = Esite(i,j,k);
-				deltaE = E2 - E1;
-
-				attd++;
-				if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
-					currEtot += deltaE; accd++;
-				}else{//reject
-					S[i*N_2+j*N+k] = sx;
-					S[N_3+i*N_2+j*N+k] = sy;
-					S[2*N_3+i*N_2+j*N+k] = sz;
-				}
-
+	deltaE = E2 - E1;
+	attd++;
+        if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
+        	currEtot += deltaE; accd++;
+        }else{//reject
+		Atom[i] = ai;
+		Atom[j] = aj;
+	}
+	std::cout << "E: " << currEtot << std::endl;
 }
-
-void wolff(int i, int j, int k, double rx, double ry, double rz){
-
-        double sx,sy,sz,pi,pj, delta;
-        int ti,tj, cnt, ii, shell, x, y, z, nn[600];
-
-        cluster[i*N_2+j*N+k] = true;
-        sx = S[i*N_2+j*N+k];
-        sy = S[N_3+i*N_2+j*N+k];
-        sz = S[2*N_3+i*N_2+j*N+k];
-        pi = (sx*rx + sy*ry + sz*rz);
-        ti = Type[i*N_2+j*N+k];
-
-        S[i*N_2+j*N+k] = sx - 2*pi*rx;
-        S[N_3+i*N_2+j*N+k] = sy - 2*pi*ry;
-        S[2*N_3+i*N_2+j*N+k] = sz - 2*pi*rz;
-
-                neighbor(i,j,k,nn);
-                cnt = 0;
-                for(shell =0; shell < SH; shell++){
-                        for(ii=0;ii<NS[shell];ii++){
-                                x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-                                if(!cluster[x*N_2+y*N+z]){
-                                        tj = Type[x*N_2+y*N+z];
-                                        pj = (S[x*N_2+y*N+z]*rx + S[N_3+x*N_2+y*N+z]*ry + S[2*N_3+x*N_2+y*N+z]*rz);
-                                        delta = -2*J[ti][tj][shell]/(T_scale*pT)*pi*pj;
-                                        if(delta < 0 && randd1() < (1-exp(delta)) )     
-                                                wolff(x,y,z,rx,ry,rz);
-                                }
-                        }
-                }
-}
-
 
 void write_pos(){
   char s[512];
   FILE *ofp;
-  sprintf(s,"compos%d.dat",myrank);
-  ofp=fopen(s,"w");
+  //sprintf(s,"compos%d.dat",myrank);
+  ofp=fopen("compos.dat","w");
 	int i,j,k;
 	for(i=0;i<N;i++)
 		for(j=0;j<N;j++)
 			for(k=0;k<N;k++){
-				fprintf(ofp, "%d\t%d\t%d\t%d\t \n",i+k, i+j, j+k,Type[i*N_2+j*N+k]);
+				fprintf(ofp, "%d\t%d\t%d\t%d\t \n",i+k, i+j, j+k,Atom[i*N_2+j*N+k]);
 			}
-	fclose(ofp);
+  fclose(ofp);
 }
 
 void write_mol2(int frame)
 {
   int i,j,k,cnt;
   char s[512];
-  double M[6];
   FILE *ofp;
-
-  Mag(M);
-  sprintf(s,"snap_rank%d_fr%d.mol2",myrank,frame-10*myrank);
+ 
+  sprintf(s,"snap_%d_%d.mol2",frame, myrank);
   ofp=fopen(s,"w");
 
   fprintf(ofp,"@<TRIPOS>MOLECULE\n");
-  fprintf(ofp,"E=%g M=%g M1=%g M2=%g M3=%g M4=%g M5=%g\n", currEtot,M[5],M[0],M[1],M[2],M[3],M[4]);
-  fprintf(ofp," %d %d\n",N*N*N*2,N*N*N);
+  fprintf(ofp,"Eng = %g\n", currEtot/N/N/N);
+  fprintf(ofp," %d %d\n",N*N*N,N*N*N);
   fprintf(ofp,"SMALL\n");
   fprintf(ofp,"NO_CHARGES\n");
   fprintf(ofp,"@<TRIPOS>ATOM\n");
-
-
 
   cnt = 0;
   for(i=0;i<N;i++)
 	  for(j=0; j<N;j++)
 		  for(k=0;k<N;k++)
-    {
-		cnt++;
-      fprintf(ofp,"%d H %d %d %d \n",cnt,i+k, i+j, j+k);
-      cnt++;
-	  fprintf(ofp,"%d %c %g %g %g \n",cnt, atom[i*N_2+j*N+k],i+k+S[i*N_2+j*N+k], i+j+S[N_3+i*N_2+j*N+k], j+k+S[2*N_3+i*N_2+j*N+k] );
+  {
+	fprintf(ofp,"%d %s %d %d %d \n",cnt++, element[Atom[i*N_2+j*N+k]+1], i+k, i+j, j+k );
 
-		  };
-  fprintf(ofp,"@<TRIPOS>BOND\n");
-
-
-  for(i=0;i<N*N*N;++i)
-    {
-      fprintf(ofp,"%d %d %d %d\n",i+1,i*2+1,i*2+2,1);
-    };
+  };
 
   fclose(ofp);
 
-
 }
 
 
-//Calculates thermodynamic quantities and writes modification-factor labeled files
-void Mag(double* M){
-	int i, j, k, t;
-	double Mx[6], My[6], Mz[6];
+// HEA order parameter 
+void O(double* M){
+	int i, j, k, x, y, z, cnt, shell, t, it, ai, aj, neighbors;
+        int nn[MAX_NEIGHBORS*3];
+	double Occ[NE], op[NE][NE];
 
-	for(i=0;i<6;i++){
-		Mx[i]=My[i]=Mz[i] = 0.0;
+	for(t = 0; t < NE; t++){
+		Occ[t] = 1.0*NT[t]/N_3;
+		for(it = 0; it < NE; it++)
+			op[t][it] = 0.0;
 	}
-	for( i=0; i<N; i++)
-		for( j=0; j<N; j++)
-			for( k=0; k<N; k++){
-				t = Type[i*N_2+j*N+k];
-				Mx[t] += S[i*N_2+j*N+k];
-				My[t] += S[N_3+i*N_2+j*N+k];
-				Mz[t] += S[2*N_3+i*N_2+j*N+k];
-				Mx[5] += S[i*N_2+j*N+k];
-				My[5] += S[N_3+i*N_2+j*N+k];
-				Mz[5] += S[2*N_3+i*N_2+j*N+k];
-			}
-	for(i = 0; i<6; i++){
-		M[i]= sqrt(Mx[i]*Mx[i] +My[i]*My[i]+Mz[i]*Mz[i]);
-		if(i < 5 )
-			M[i] *= invN*5;
-		else 
-			M[i] *= invN;
+	neighbors = 0;
+	for(shell =0; shell < O_SH; shell++)
+		neighbors += NS[shell];
+		
+	for(i=0; i<N; i++)
+		for(j=0; j<N; j++)
+			for(k=0; k<N; k++){
+				neighbor(i,j,k,nn);
+				cnt = 0; ai = Atom[i*N_2+j*N+k];
+				for(shell =0; shell < O_SH; shell++)for(it=0;it<NS[shell];it++){
+					x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
+					aj = Atom[x*N_2+y*N+z];
+					op[ai][aj] += 1.0/neighbors; 
+				}
+				//op[ai] += fabs( 1.0*M/((cnt+1)/3) - Occ[ai]);
 	}
+	//op[NE] = 0.0;
+	for(t = 0; t < NE; t++){
+		for(it = 0; it < NE; it++){
+			op[t][it] /= N_3; //NT[t];
+			op[t][it] = 1 - op[t][it]/(Occ[t]*Occ[it]);
+		}
+		//op[t] /= (NT[t]*2*Occ[t]*(1-Occ[t]));
+		//op[NE] += op[t];
+	}
+	M[0] = op[0][2]; //Mo-Ta
+	M[1] = op[1][2]; //Nb-Ta
+	M[2] = op[1][3]; //Nb-W
+	M[3] = op[2][3]; //Ta-W
+	M[NE] = 0.0;
+	for(t = 0; t < NE; t++){
+		//M[t] = op[0][t];  
+		M[NE] += fabs(M[t]);
+	}	
+	M[NE] /= NE; 	
+	//op[NE] /= NE;			
+	
 }
-
 
 
 

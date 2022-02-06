@@ -176,12 +176,11 @@ void initWL(void)
 
 	//Primary Binning Direction for WL Simulation
 	D1BINS = (int)((WLD1max - WLD1min)/(dWLD1*invN));
-
 	//Inverse Bin Width
 	invdWLD1=1.0/(dWLD1*invN);
-
+	std::cout << "D1BINS: " << D1BINS << std::endl;
 	//correct the int cut off;
-     WLD1max = WLD1min +  D1BINS/invdWLD1;   
+     	WLD1max = WLD1min +  D1BINS/invdWLD1;   
 
 	//this value times Ebond-WLEbondmin, gives the bin number;
 	//WLinvdEbond=(1.0*Lbond)/(WLEbondmax-WLEbondmin);
@@ -204,10 +203,10 @@ void initWL(void)
 
 	//Check to see if memory was allocated properly
 	if ( (wlH == NULL) || (wllng == NULL) || (mask == NULL) )
-    {
+    	{
         fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
         exit(1);
-    };
+    	};
 
 	//Initialize Arrays
 	for(i=0;i<D1BINS;++i)
@@ -301,10 +300,10 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	};
 
 	attemptrot[iti] += 1;
-    assert ( iti>=0 && iti < D1BINS);   
+    	assert ( iti>=0 && iti < D1BINS);   
 
 	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
-    {
+    	{
 		if(fti < 0 ){
 			printf("Emin not low enough! Ei = %g, Ef=%g\n", Ei, Ef);
 			exit(-1);
@@ -315,19 +314,19 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 			return 0;
 		}
 
-    }
+    	}
 	else
-    {
+    	{
 		//inside of bounds
 
 		lngi=wllngi[iti] + wllng[iti];
 		lngf=wllngi[fti] + wllng[fti];
-      	R=exp(lngi-lngf);
+      		R=exp(lngi-lngf);
 		if(randd1()<R)
 		{
 			//accept
 			acceptrot[iti] += 1;
-	    	wlHi[fti]+=1;
+	    		wlHi[fti]+=1;
 			wllngi[fti]+=lnwlf;		
 			return 1;
 		}
@@ -338,7 +337,7 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 			wllngi[iti]+=lnwlf;	
 			return 0;
 		};
-    };
+    	};
 
 }
 

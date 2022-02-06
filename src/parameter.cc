@@ -4,8 +4,8 @@
 #include <string.h>
 #include "parameter.hpp"
 #include "alloy.hpp"
-#include "pt.hpp"
 #include "wanglandau.hpp"
+#include "pt.hpp"
 
 
 /*
@@ -47,7 +47,7 @@ void ReadInput(const char* filename)
 //Bin Width for Primary Sampling Direction	
 	if (!strcmp(pname, "dWLD1")) {
 	  if (sscanf(line, "%*50s %lg", &dWLD1) != 1) ErrorMsg(2, pname);
-	  if (dWLD1 > 10.0 || (dWLD1 < 0.0001)) ErrorMsg(3, pname);  //Generic Boundary Limits
+	  if (dWLD1 > 10.0 || (dWLD1 < 0.000001)) ErrorMsg(3, pname);  //Generic Boundary Limits
 	  continue;
 	}
 
