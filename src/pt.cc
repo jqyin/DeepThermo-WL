@@ -158,6 +158,7 @@ void swap(bool even){
 	}
 
 
+	ini_W();
 	//MPI_Barrier(MPI_COMM_WORLD);
 
 	free(buf_ui);
@@ -191,12 +192,12 @@ int Metropolis(double Ei, double Ef)
     };
 }
 
-void mchybrid(){
+void mchybrid(int mode){
 
 	int cnt, i, j,k;
 	double eta1, eta2, etasq, rx, ry, rz;
 	for(cnt=0; cnt<N*N*N; cnt++){
-		Rot();
+		Rot(mode);
 	}
 /*	for(i = 0; i < N; i++)
 		for(j = 0; j < N; j++)
@@ -250,7 +251,7 @@ void correlation(double* avgScorr){
 	}
 }*/
 
-void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun){
+void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, int mode){
 	int mcs,i,j,k,n, t;
 	FILE *ofp, *ofp1, *ofp2, *ofp_time;
 	double M[NE+1]; // 0 - cr; 1-fe; 2-co; 3-ni; 4-total;
@@ -284,7 +285,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun){
 //#ifndef RESTART
         if(Restart == 0){
 	        for(mcs=0;mcs<DROPI;mcs++){
-		        mchybrid();
+		        mchybrid(mode);
 		        if(mcs%2==0){ 
 			        swap(flag);
 			        if(flag) 
@@ -330,7 +331,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun){
 					t3 = std::chrono::high_resolution_clock::now();
         			}
 			}
-			mchybrid();
+			mchybrid(mode);
 			if(mcs == 1){
 				if(myrank == 0){
 					//t4 = time(NULL);
@@ -401,7 +402,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun){
 	// output spin configuration;
 	if(myrank == 0)
 		write_pos(); 
-	write_mol2(SAMPS);
+	write_xyz(SAMPS);
 	avgE/=1.0*SAMPS;
         avgE2/=1.0*SAMPS;
 	for(i=0; i<(NE+1);i++){

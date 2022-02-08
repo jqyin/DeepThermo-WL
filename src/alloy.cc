@@ -13,81 +13,76 @@
 
 extern int myrank, nprocs;
 void initialize(){
-
 	//maximum rotational angle;
 	D=1.0*Pi; DD = 0.2;
 	attd=accd=0;
 
-	//initialize spin configuration;
-	//ini_conf(state);
-
 	ini_coupling();
-//	write_mol2(-1);
 	invN=1.0/(N*N*N);
-	
 }
 
 void ini_coupling(){
-	int i,j,k,ii,cnt,shell,ti[NE*(NE-1)/2 + NE], tj[NE*(NE-1)/2 + NE],x,y,z;
-	double r, Jr[NE*(NE-1)/2 + NE],Jrold;
-	FILE* fop;
-	for(i=0; i<NE; i++)
-		for(j=0; j<NE; j++)
-			for(k=0; k<SH; k++)
-				J[i][j][k] = 0.0;
+
+        int i,j,k,t,ii,cnt,shell,ti[NE*(NE-1)/2 + NE], tj[NE*(NE-1)/2 + NE],x,y,z;
+        double r, Jr[NE*(NE-1)/2 + NE],Jrold;
+        FILE* fop;
+
+        for(i=0; i<NE; i++)
+                for(j=0; j<NE; j++)
+                        for(k=0; k<SH; k++)
+                                J[i][j][k] = 0.0;
 
 // read from input file;
-	fop = fopen("coupling.input","r");
+        fop = fopen("coupling.input","r");
         if(fop==NULL){
-		printf("coupling.input file was not opened\n");
-		exit(1);
+                printf("coupling.input file was not opened\n");
+                exit(1);
         }
-	//for(i=0;i<100; i++) // 10 shell, each with 10 J;
-	shell = 0; Nneighbors=0; Dist[0] = 0.0;
-	while( shell < SH)
+
+        shell = 0; Nneighbors=0;
+        for(i=0;i<SH;i++){
+                NS[i] = 0;
+                Dist[i] = 0.0;
+        }
+        while( shell < SH)
         {
-		fscanf(fop, "%lg", &r);
-	//	for(i=0;i<(NE*(NE-1)/2 + NE);i++){
-			i=0;
-			fscanf(fop, "%lg %d %d", &Jr[i], &ti[i], &tj[i]);
-	//	}
-		fscanf(fop, "%d %d %d\n", &x, &y, &z);
-		  
-		if(Nneighbors == 0){
-			Jrold = Jr[0];
-		}else{
-			// shell by coupling 
-			//if(fabs(Jrold -Jr[0]) > 1e-10){
-			// shell by distance
-			if(fabs(r- Dist[shell]) > 1e-6){
-				shell++;
-				Jrold = Jr[0];
-				if(shell == SH) break;
-			}
-		}
-		nlist[Nneighbors].x = x;
-		nlist[Nneighbors].y = y;
-		nlist[Nneighbors].z = z;
-	//	for(i=0;i<(NE*(NE-1)/2 + NE);i++)
-			i = 0; 
-			J[ti[i]-1][tj[i]-1][shell]=J[tj[i]-1][ti[i]-1][shell]= 2*Jr[i];
-		Dist[shell] = r;  
-		NS[shell]++; // number of neighbors within each shell
-		Nneighbors++; // total number of neighbors
-		
-        };
+                fscanf(fop, "%lg", &r);
+                for(i=0;i<(NE*(NE-1)/2 + NE);i++){
+                        fscanf(fop, "%lg %d %d", &Jr[i], &ti[i], &tj[i]);
+                }
+                fscanf(fop, "%d %d %d\n", &x, &y, &z);
+                if(Nneighbors == 0){
+                        Jrold = Jr[0];
+                }else{
+                       // shell by coupling
+                        //if(fabs(Jrold -Jr[0]) > 1e-10){
+                        // shell by distance
+                        if(fabs(r- Dist[shell]) > 1e-6){
+                                shell++;
+                                Jrold = Jr[0];
+                                if(shell == SH) break;
+                        }
+                }
+                nlist[Nneighbors].x = x;
+                nlist[Nneighbors].y = y;
+                nlist[Nneighbors].z = z;
+                for(i=0;i<(NE*(NE-1)/2 + NE);i++)
+                        J[ti[i]-1][tj[i]-1][shell]=J[tj[i]-1][ti[i]-1][shell]= Jr[i];
+                Dist[shell] = r;
+                NS[shell]++; // number of neighbors within each shell
+                Nneighbors++; // total number of neighbors
+        }
 
-	fclose(fop);	
+        fclose(fop);
 
-	if(myrank==0){
-		for(i=0;i<SH;i++)
-			fprintf(stderr,"%d\t%d\t%lf\t%lf\n",i,NS[i],Dist[i],J[0][0][i]);
-	}
-	inputPos = (int**)malloc(sizeof(int*)*N_3); 
-	for(i=0; i<N_3; i++){
-		inputPos[i] = (int*)malloc(sizeof(int)*Nneighbors);
-	}
-
+        if(myrank==0){
+                for(i=0;i<SH;i++)
+                        fprintf(stderr,"%d\t%d\t%lf\t%lf\n",i,NS[i],Dist[i],J[0][1][i]);
+        }
+        inputPos = (int**)malloc(sizeof(int*)*N_3);
+        for(i=0; i<N_3; i++){
+                inputPos[i] = (int*)malloc(sizeof(int)*Nneighbors);
+        }
 
 }
 
@@ -100,6 +95,27 @@ void shuffle(int *array, size_t n)
           int t = array[j];
           array[j] = array[i];
           array[i] = t;
+        }
+}
+
+void ini_W(){
+        int i, j, k, idx, cnt, shell, ii, ai, aj;
+        double Wsum = 0.0;
+        memset(W, 0, sizeof(int)*NE*NE*SH);
+        // init W matrix
+        for(i=0; i<N; i++)for(j=0; j<N; j++)for(k=0; k<N; k++){
+                idx = i*N_2+j*N+k;
+                ai = Atom[idx];
+                cnt = 0;
+                for(shell =0; shell < SH; shell++){
+                        for(ii=0;ii<NS[shell];ii++){
+                                aj = Atom[inputPos[idx][cnt++]];
+                                if(ai <= aj)
+                                        W[ai][aj][shell]++;
+                                else
+                                        W[aj][ai][shell]++;
+                        }
+                }
         }
 }
 
@@ -118,7 +134,7 @@ void ini_apos(){
 				inputPos[idx][cntt++] = x*N_2+y*N+z;
 		}			
 	} 
-	
+	ini_W();	
 }
 void ini_alloy(int state){
 
@@ -235,33 +251,71 @@ void  neighbor(int i, int j, int k, int* nn){
 	}
 }
 
+void updateWsite(int ai, int aj, int pi, int pj){
+        int shell, j, id, a;
+        int cnt=0;
+        for(shell = 0; shell < SH; shell++){
+                for(j=0; j<NS[shell]; j++){
+                        id = inputPos[pi][cnt++];
+                        if(id != pj){
+                                a = Atom[id];
+                                if(ai <= a)
+                                        W[ai][a][shell] -= 2;
+                                else
+                                        W[a][ai][shell] -= 2;
+                                if(aj <= a)
+                                        W[aj][a][shell] += 2;
+                                else
+                                        W[a][aj][shell] += 2;
+                        }
+                }
+        }
+
+}
+
+void updateW(int ai, int aj, int idxi, int idxj){
+        //updateWsite(Atom[idxi],idxi,idxj,false);
+        //updateWsite(Atom[idxj],idxi,idxj,true);
+        //updateWsite(Atom[idxj],idxj,idxi,false);
+        //updateWsite(Atom[idxi],idxj,idxi,true);
+        updateWsite(ai, aj, idxi, idxj);
+        updateWsite(aj, ai, idxj, idxi);
+}
+
+
 double Etot(){
 	double E;
 	E = 0.0;
 
-	#pragma omp parallel for reduction(+: E) num_threads(NE)
-	for(int t = 0; t < NE; t++){
-		tensorflow::TensorShape data_shape({NT[t], Nneighbors*(NE-1)});
-        	tensorflow::Tensor data(tensorflow::DT_UINT8, data_shape);
-        	auto data_ = data.flat<std::uint8_t>().data();
-                int cnt=0;
-		for(int i=0; i<N_3; i++){
-			if(Atom[i] == t){
-				for(int j = 0; j < Nneighbors; j++){//num of neighbors  
-					for(int k=0; k<NE-1; k++){//num of representation 
-                                                //printf("i%d,j%d,input%d\n",i,j,inputPos[i][j]);
-						data_[cnt++] = encode[Atom[inputPos[i][j]]][k]; 
-                                        }
-				}
+#ifdef DL_MODEL
+	tensorflow::TensorShape data_shape({1, SH*NE*(NE-1)/2});
+        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+        auto data_ = data.flat<float>().data();
+        int cnt=0;
+       	for(int shell = 0; shell < SH; shell++){
+                for(int i =0; i < NE-1; i++){
+                        for(int j =i+1; j < NE; j++){
+				data_[cnt++] = invN*W[i][j][shell]/NS[shell];
 			}
 		}
-		std::vector<tensorflow::Tensor> outputs;
-                models[t].Predict(data, outputs);
-		for(int i = 0; i < NT[t]; i++){	
-			E += outputs[0].flat<float>().data()[i];
+	}
+
+	std::vector<tensorflow::Tensor> outputs;
+        model.Predict(data, outputs);
+	E = outputs[0].flat<float>().data()[0] + mlp_intercept;
+        E = E/E_scale; 
+
+#else // regression model 
+       	for(int shell = 0; shell < SH; shell++){
+                for(int i =0; i < NE-1; i++){
+                        for(int j =i+1; j < NE; j++){
+                                E += (1.0*W[i][j][shell]/NS[shell]/N_3)*J[i][j][shell];
+			}
 		}
 	}
-	return E; 
+	E += reglin_intercept;
+#endif
+	return E*N_3; 
 
 }
 /*
@@ -338,34 +392,50 @@ void wolff(int i, int j, int k, double rx, double ry, double rz){
 		}
 }
 */
-void Rot(){
+void Rot(int mode){
 	int i, j, k, x, y, z, ii, jj, kk, n, it, shell;
 	int ai, aj, cnt, cntE; 
+	int Wo[NE][NE][SH];
 	double deltaE, dE, E1, E2;
         //int nn[MAX_NEIGHBORS*3];
 
-	i = (int) (randd1()*N_3);
-	n = (int) (randd1()*NS[0]);
-	//neighbor(i/N_2,(i/N)%N,i%N,nn);			
-        //x = nn[n*3]; y = nn[n*3+1]; z = nn[n*3+2];
-	//j = x*N_2+y*N+z;
-	j = inputPos[i][n];	
-	E1 = currEtot;
-	ai = Atom[i];
-	aj = Atom[j];
-	Atom[i] = aj;
-	Atom[j] = ai;	
-	E2 = Etot();
+        i = (int) (randd1()*N_3);
+        n = (int) (randd1()*Nneighbors);
+        j = inputPos[i][n];
+    	if(Atom[i] != Atom[j]){
+        	E1 = currEtot;
+        	ai = Atom[i];
+        	aj = Atom[j];
+        	memcpy(Wo, W, sizeof(int)*NE*NE*SH);
+        	updateW(ai, aj, i, j);
+        	Atom[i] = aj;
+        	Atom[j] = ai;
+        	E2 = Etot();
 
-	deltaE = E2 - E1;
-	attd++;
-        if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
-        	currEtot += deltaE; accd++;
-        }else{//reject
-		Atom[i] = ai;
-		Atom[j] = aj;
-	}
-	std::cout << "E: " << currEtot << std::endl;
+        	deltaE = E2 - E1;
+        	attd++;
+		if(mode == 0){//metropolis
+        		if(Metropolis(currEtot, currEtot+deltaE) == 1){// accept
+        			currEtot += deltaE; accd++;
+        		}else{//reject
+                		Atom[i] = ai;
+                		Atom[j] = aj;
+                		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
+        		}
+		}
+		else{//wanglandau
+        		if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
+                		currEtot += deltaE; accd++;
+        		}else{//reject
+                		Atom[i] = ai;
+                		Atom[j] = aj;
+                		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
+        		}
+
+			//std::cout << "E: " << currEtot << std::endl;
+		}
+    	}
+
 }
 
 void write_pos(){
@@ -382,33 +452,105 @@ void write_pos(){
   fclose(ofp);
 }
 
-void write_mol2(int frame)
+void write_xyz(int frame)
 {
   int i,j,k,cnt;
   char s[512];
   FILE *ofp;
  
-  sprintf(s,"snap_%d_%d.mol2",frame, myrank);
-  ofp=fopen(s,"w");
+  sprintf(s,"snap_%d_%d.xyz",frame, myrank);
+  ofp=fopen(s,"ab+");
+  fprintf(ofp, "%d\n", N_3); 
+  fprintf(ofp,"Eng = %.8lg  MC_step = %d\n", currEtot, frame);
 
-  fprintf(ofp,"@<TRIPOS>MOLECULE\n");
-  fprintf(ofp,"Eng = %g\n", currEtot/N/N/N);
-  fprintf(ofp," %d %d\n",N*N*N,N*N*N);
-  fprintf(ofp,"SMALL\n");
-  fprintf(ofp,"NO_CHARGES\n");
-  fprintf(ofp,"@<TRIPOS>ATOM\n");
-
-  cnt = 0;
   for(i=0;i<N;i++)
-	  for(j=0; j<N;j++)
-		  for(k=0;k<N;k++)
-  {
-	fprintf(ofp,"%d %s %d %d %d \n",cnt++, element[Atom[i*N_2+j*N+k]+1], i+k, i+j, j+k );
-
-  };
-
+          for(j=0; j<N;j++)
+                  for(k=0;k<N;k++)
+                        fprintf(ofp,"%s %d %d %d \n",element[Atom[i*N_2+j*N+k]+1], j-i+k, k-j+i, j+i-k);
   fclose(ofp);
 
+}
+
+void thermoqs()
+{
+        int i;
+        double T,U,Z,C,F,S;
+        double centerE,lambda,Bw,Nfree;
+
+        FILE *therm_op;
+        char s1[512];
+
+        //Opening File containing all thermodynamic quantities (in following order)
+        //      T       U       Cv      freeE  Entropy  Rgyr2  EEdist
+        sprintf(s1,"therm.dat");
+        therm_op=fopen(s1,"w");
+
+        if( (therm_op==NULL) )
+        {
+                fprintf(stderr, "\nHey, this file ( in thermoqs() ) could not be opened!\n\n");
+                exit(1);
+        };
+        //Normalization for free energy
+        Nfree = 0.0;
+
+        //Main Temperature Loop
+        for(T=TTi;T<=TTf+dTT;T=T+dTT)
+        {
+                U = 0.0;        // Initializing the average energy <E>
+                Z = 0.0;        // Initializing the Partition Function
+                C = 0.0;        // Initialize the Specific Heat
+                F = 0.0;        // Initialize the free energy
+                S = 0.0;        // Initialize the entropy
+                Bw = 0.0;       //Boltzmann weight
+                lambda = -1.0e300;      //Normalization shift (max value of DOS considering T)
+                centerE = 0.0;  // Taking the center of the energy bin
+               //Finds the max and min of exp( wllng[][] )*exp(Etot*N/T)
+                for(i=0;i<D1BINS;i++)
+                {
+                        centerE = ( (i/invdWLD1+WLD1min) + 0.5*(WLD1max - WLD1min)/(1.0*D1BINS) )/invN;
+
+                        if( (lambda < ((wllng[i]) - 1.0*(centerE*E_scale)/(T*T_scale))) )// && (wllng[i] > 0.0) )
+                                lambda = ((wllng[i]) - 1.0*(centerE*E_scale)/(T*T_scale));
+
+                };
+
+                //Central Loop for calculating thermodynamic properties from the DOS
+                for(i=0;i<D1BINS;i++)
+                {
+                        //Taking the center of the bin
+                        centerE = ( (i/invdWLD1+WLD1min) + 0.5*(WLD1max - WLD1min)/(1.0*D1BINS) )/invN;
+
+                        //Boltzmann Factor
+                        Bw =  exp( wllng[i]  - (centerE*E_scale)/(T*T_scale) - lambda );
+
+                        //Partition Function
+                        Z = Z + Bw;
+
+                        //Average Energy <E>
+                        U = U + (centerE)*Bw;
+
+                        //Average Energy Squared <E^2>
+                        C = C + (centerE)*(centerE)*Bw;                                                        
+                };
+
+                //Internal Energy
+                U = U/Z;
+                //Normalization of free energy
+                if(T == TTi)
+                {
+                        Nfree = -(T*T_scale)/E_scale*( lambda + log(Z) ) - U;
+                };
+                //Specific Heat
+                C = ( (C/Z) - (U*U) )*E_scale*E_scale / (T*T*T_scale*T_scale);
+                //Free Energy
+                F = -(T*T_scale)/E_scale*( lambda + log(Z) ) - Nfree;
+                //Entropy
+                S = (U - F)*E_scale/(T*T_scale);
+
+                fprintf(therm_op,"%g\t%g\t%g\t%g\t%g\n",T,U*invN,C*invN,F*invN,S*invN);
+        };
+
+        fclose(therm_op);
 }
 
 

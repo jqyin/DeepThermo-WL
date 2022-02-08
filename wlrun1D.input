@@ -18,16 +18,16 @@ NBINTERACTION  1
 
 ### Wang-Landau ########################################
 ### Bin Width for Primary Sampling Direction ###########
-dWLD1 0.1
+dWLD1 0.005
 
 ### MAXimum Boundary for Primary Sampling Direction ####
-WLD1min  -0.53
+WLD1min  -1.76657
 
 ### MINimum Boundary for Primary Sampling Direction ####
-WLD1max  -0.52
+WLD1max  -1.763
 
 ### Flatness Criteria (min of hist / avg of hist) ######
-Flatness  0.5 
+Flatness  0.6
 
 ### Initial Modification Factor (natural log) ##########
 ModFactorInit  1.0
@@ -43,10 +43,10 @@ ProductionBinSamps  10000
 
 ### Thermodynamics #####################################
 ### Initial Temperature ################################
-TTi  200 
+TTi  100 
 
 ### Final Temperature ##################################
-TTf  1500
+TTf  3000
 
 ### Temperature Step ###################################
 dTT  2 
@@ -57,7 +57,7 @@ dTT  2
 MetropolisSampling  0
 
 ### Initial Temperature for simple Seq() loop ##########
-MTi  100.0
+MTi  10.0
 
 ### Final Temperature for simple Seq() loop ############
 MTf  1000.0
@@ -66,13 +66,13 @@ MTf  1000.0
 MdT  0.1
 
 ### Number of MC Samples taken in the Seq() function ###
-MSAMPS  1.0e2
+MSAMPS  1.0e0
 
 ### Number of Samples separating data in Seq() #########
 MSEP  1.0e0
 
 ### Number of Dropped Samples before each T run ########
-MDROP  2.0e4
+MDROP  1.0e1
 
 ########################################################
 

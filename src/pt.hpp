@@ -30,12 +30,12 @@ GLOBAL int acc;
 
 void ini_T(double Ti, double Tf, int nT);
 void ini_sys();
-void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int i);
+void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int i, int m);
 void swap(bool);
 void freePT();
 int Metropolis(double Ei, double Ef);
 void read_state();
 void write_state();
-void mchybrid();
+void mchybrid(int);
 
 #endif

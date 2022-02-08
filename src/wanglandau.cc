@@ -155,7 +155,7 @@ void write_DOS_H(void)
 	{
 		//Printing Out 1D Data
 		//fprintf(ofp,"%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i]);
-		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
+		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),1.0*wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
 	};
   
 	fflush(ofp);
@@ -190,9 +190,9 @@ void initWL(void)
 	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
 	//allocate storage for an array of pointers
   
-	wlH = (int*)malloc( D1BINS * sizeof(int ) );
-	wlHd = (int*)malloc( D1BINS * sizeof(int ) );
-	wlHi = (int*)malloc( D1BINS * sizeof(int ) );
+	wlH = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHd = (double*)malloc( D1BINS * sizeof(double ) );
+	wlHi = (double*)malloc( D1BINS * sizeof(double ) );
 	wllng = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngd = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngi = (double*)malloc( D1BINS * sizeof(double ) );
@@ -204,8 +204,8 @@ void initWL(void)
 	//Check to see if memory was allocated properly
 	if ( (wlH == NULL) || (wllng == NULL) || (mask == NULL) )
     	{
-        fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
-        exit(1);
+        	fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
+       	 	exit(1);
     	};
 
 	//Initialize Arrays
@@ -230,15 +230,15 @@ void initWL(void)
 	pT=100;
 	while( (currEtot*invN> WLD1max)  )   // || (currEtot*invN<WLD1min) )
     	{
-		mchybrid();
+		mchybrid(1);
 		fprintf(stderr,"rank%d Relaxing:  %g of %g \n", myrank, currEtot*invN,WLD1max);
     	};
 
 	if(currEtot*invN<WLD1min){ // extend ground energy;
-		fprintf(stderr,"currEtot: %g  \n",currEtot*invN);
-		exit(-1);
+		fprintf(stderr,"currEtot/N: %g  \n",currEtot*invN);
+		//exit(-1);
 	};
-	LOWESTE = (int) ((currEtot*invN-WLD1min)*invdWLD1);
+	LOWESTE = 0; //(int) ((currEtot*invN-WLD1min)*invdWLD1);
 }
 
 void freeWL(){
@@ -257,11 +257,12 @@ void freeWL(){
 
 }
 //attempts to run one WL hybrid move per bin
-void sweepWL(int sweeps)
+void sweepWL(int sweeps, int mode)
 {
 	for(int i=0;i<sweeps;++i)
-   {
-		wlhybrid();
+   	{
+		//wlhybrid();
+		Rot(mode);
 	};
 }
 
@@ -271,9 +272,39 @@ void wlhybrid(void)
 {
 	int i,j,k;
 	for(i=0;i<N*N*N;++i){
-		Rot();
+		Rot(1);
 	} 
 	
+}
+
+void global_update(){
+	int i,j;
+	double dg;
+	FILE * fp;
+	double w;
+    	double sum =0.0;
+
+	if(wllng[0] != 0.0) {
+
+		w = (PERW*wllng[0]);     // assuming it's monotonically increase;
+		fp = fopen("after_global_updata.dat", "w");
+		for(i=0;i<D1BINS;++i){
+			if(wllng[i] > w){
+				dg = KAPA*lnwlf * exp( -LAMDA/(wllng[i]-w) );
+				wllng[i] += dg;
+			}
+			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min,wllng[i]);
+		}
+		fclose(fp);
+	}else{ // first iteration;
+		j = (int)((1-PERW)*D1BINS);
+		for(i=j+1;i<D1BINS;++i){
+			dg = KAPA*lnwlf * exp( -LAMDA/(i-j) );
+			wllng[i] += dg;
+		}
+	
+	}
+//	KAPA = sqrt(KAPA);
 }
 
 
@@ -293,7 +324,7 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	if(fti < LOWESTE+10 && fti >= LOWESTE)
 	{	
 		if(! list[fti - LOWESTE]){
-			write_mol2(fti - LOWESTE + myrank*10);
+			write_xyz(fti - LOWESTE);
 			list[fti - LOWESTE] = true;
 		}
 		//fprintf(stderr,"New Lowest E config %g\n\n",LOWESTE);
@@ -304,15 +335,17 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 
 	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
     	{
-		if(fti < 0 ){
+		/*if(fti < 0 ){
 			printf("Emin not low enough! Ei = %g, Ef=%g\n", Ei, Ef);
 			exit(-1);
 		}
-		if(fti >=D1BINS){
+		if(fti >=D1BINS){*/
 			wlHi[iti]+=1;
 			wllngi[iti]+=lnwlf;	
+			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
+			//wllngi[iti]+= (iti > E_0)? lnwlf*lngk_f: lnwlf;	
 			return 0;
-		}
+		//}
 
     	}
 	else
@@ -328,6 +361,8 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 			acceptrot[iti] += 1;
 	    		wlHi[fti]+=1;
 			wllngi[fti]+=lnwlf;		
+			//wlHi[fti]+= (fti > E_0)? 1.0/(1.0+k_f): 1.0;
+			//wllngi[fti]+= (fti > E_0)? lnwlf*lngk_f: lnwlf;	
 			return 1;
 		}
 		else
@@ -335,6 +370,8 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 			//reject
 			wlHi[iti]+=1;
 			wllngi[iti]+=lnwlf;	
+			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
+			//wllngi[iti]+= (iti > E_0)? lnwlf*lngk_f: lnwlf;	
 			return 0;
 		};
     	};

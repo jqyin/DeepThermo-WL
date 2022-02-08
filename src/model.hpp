@@ -39,10 +39,10 @@ void heaModel::LoadModel(string model_path, SessionOptions options){
 }
 
 void heaModel::Predict(Tensor input, vector<Tensor> &pred){
-//	const string input_node = "input_1:0";
-//	string output_node = "Identity:0";
-	const string input_node = "serving_default_input_1:0";
-	string output_node = "StatefulPartitionedCall:0";
+	const string input_node = "input_1:0";
+	string output_node = "Identity:0";
+//	const string input_node = "serving_default_input_1:0";
+//	string output_node = "StatefulPartitionedCall:0";
 	vector<std::pair<string, Tensor>> data = {{input_node, input}};
 	auto status = this->bundle.GetSession()->Run(data, {output_node}, {}, &pred);
 	if (!status.ok()){
