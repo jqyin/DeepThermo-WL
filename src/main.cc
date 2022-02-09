@@ -11,6 +11,7 @@
 #include "alloy.hpp"
 #include "pt.hpp"
 #include "wanglandau.hpp"
+#include "allreduce.h"
 
 int nprocs;
 int myrank;
@@ -70,6 +71,7 @@ int main(int argc, char *argv[])
 	initWL();
         numf=1;
 	STARTED = 0;
+	size_t msgSize = D1BINS*sizeof(double);
 	for(lnwlf=1.0;lnwlf>ModFactorFinal;lnwlf=lnwlf/IterationFactor)
 	{
 		IterSweeps=0;
@@ -89,8 +91,10 @@ int main(int argc, char *argv[])
 			TotalSweeps+=1; 
 			if( (TotalSweeps % 10) == 0)
 			{
-				MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				RingAllreduce(wllngi,msgSize,&wllngd);
+				RingAllreduce(wlHi,msgSize,&wlHd);
+				//MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 			        for(i=0;i<D1BINS;i++){
 					wlH[i] += wlHd[i];
 					wllng[i] += wllngd[i];

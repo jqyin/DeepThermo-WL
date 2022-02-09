@@ -7,7 +7,7 @@ WFlag ?= -DGLOBAL_UPDATE
 relax_dir = relax
 hist_dir = hist
 objs = \
-	rand.o parameter.o \
+	rand.o parameter.o allreduce.o\
 	alloy.o wanglandau.o pt.o \
 	main.o 
 
