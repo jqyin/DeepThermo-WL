@@ -5,6 +5,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <chrono>
 #include "mpi.h"
 #include "parameter.hpp"
 #include "rand.hpp"
@@ -22,11 +23,12 @@ int main(int argc, char *argv[])
  
 	int i,j,k,m;
 	int STARTED;  //Shows whether or not the restart has been applied
-	FILE *ofp_run;
+	FILE *ofp_run, *ofp_comm;
 	char s[512];
 	double tmp_flat=0.0, volume;
 	int nT;
-	time_t t1,t2;
+	time_t start, end;
+	std::chrono::high_resolution_clock::time_point tik,tok;
 
 	MPI_Init(&argc,&argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
@@ -65,6 +67,8 @@ int main(int argc, char *argv[])
 
         if(myrank == 0){
                 ofp_run=fopen("run.dat","a");
+                ofp_comm=fopen("comm.dat","w");
+		start = time(NULL);
                 fprintf(ofp_run,"#seeds: %d,%d,%d\n",314159265,362436069,atoi(argv[4]));
         }
 	//Initialize the Wang-Landau sampling parameters
@@ -77,12 +81,12 @@ int main(int argc, char *argv[])
 		IterSweeps=0;
 		resetWL();
 		tmp_flat=0.0;
-		MPI_Barrier(MPI_COMM_WORLD);
+		//MPI_Barrier(MPI_COMM_WORLD);
 #ifdef  GLOBAL_UPDATE
-		if(myrank == 0)
-			global_update();
-		MPI_Bcast(wlH, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-		MPI_Bcast(wllng, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+		//if(myrank == 0)
+		global_update();
+		//MPI_Bcast(wlH, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+		//MPI_Bcast(wllng, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
@@ -91,10 +95,14 @@ int main(int argc, char *argv[])
 			TotalSweeps+=1; 
 			if( (TotalSweeps % 10) == 0)
 			{
+				if(TotalSweeps == 10 && myrank == 0)
+					tik = std::chrono::high_resolution_clock::now();
 				RingAllreduce(wllngi,msgSize,&wllngd);
 				RingAllreduce(wlHi,msgSize,&wlHd);
 				//MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 				//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				if(TotalSweeps == 10 && myrank == 0)
+					tok = std::chrono::high_resolution_clock::now();
 			        for(i=0;i<D1BINS;i++){
 					wlH[i] += wlHd[i];
 					wllng[i] += wllngd[i];
@@ -102,21 +110,27 @@ int main(int argc, char *argv[])
 				memset(wllngi, 0, D1BINS*sizeof(double));
 				memset(wlHi, 0, D1BINS*sizeof(double));
 				tmp_flat=flatWL();
-				//if( (IterSweeps %10)==0 &&  myrank == 0)
-				if(myrank == 0)
-					 write_DOS_H();
+				if( (IterSweeps %100)==0 &&  myrank == 0)
+					write_DOS_H();
 			};
 		}
 		if(myrank == 0)
 			write_DOS_H();
 		if(myrank == 0){
                         fprintf(ofp_run,"%g\t%d\t%d\t%g\t%g\n",lnwlf,TotalSweeps*D1BINS,IterSweeps*D1BINS,tmp_flat,numbelow_flat);
+			std::chrono::duration<double, std::milli> ms_double = tok - tik;
+                        fprintf(ofp_comm, "comm time: %f (ms)\nbandwidth: %f (GB/s)\n", 1.0*ms_double.count(), 2.0*msgSize/1e+6/ms_double.count());
                         fflush(ofp_run);
+                        fflush(ofp_comm);
+
                 }
 		numf=numf+1;
 	}
-	if(myrank == 0)
+	if(myrank == 0){
+		end = time(NULL);
+		fprintf(ofp_run, "wl time: %ld (s) \n", end-start); 
 		fclose(ofp_run);
+	}
 
         /*resetWL();              
         int count=0;

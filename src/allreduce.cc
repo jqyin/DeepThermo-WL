@@ -121,12 +121,12 @@ void RingAllreduce(double* data, size_t length, double** output_ptr) {
         throw std::runtime_error("MPI_Comm_size failed with an error");
 
     // Check that the lengths given to every process are the same.
-    std::vector<size_t> lengths = AllgatherInputLengths(size, length);
+    /*std::vector<size_t> lengths = AllgatherInputLengths(size, length);
     for(size_t other_length : lengths) {
         if(length != other_length) {
             throw std::runtime_error("RingAllreduce received different lengths");
         }
-    }
+    }*/
 
     // Partition the elements of the array into N approximately equal-sized
     // chunks, where N is the MPI size.
@@ -169,7 +169,7 @@ void RingAllreduce(double* data, size_t length, double** output_ptr) {
 
     MPI_Status recv_status;
     MPI_Request recv_req;
-    MPI_Datatype datatype = MPI_FLOAT;
+    MPI_Datatype datatype = MPI_DOUBLE;
 
     // Now start ring. At every step, for every rank, we iterate through
     // segments with wraparound and send and recv from our neighbors and reduce
@@ -185,7 +185,7 @@ void RingAllreduce(double* data, size_t length, double** output_ptr) {
                 datatype, recv_from, 0, MPI_COMM_WORLD, &recv_req);
 
         MPI_Send(segment_send, segment_sizes[send_chunk],
-                MPI_FLOAT, send_to, 0, MPI_COMM_WORLD);
+                MPI_DOUBLE, send_to, 0, MPI_COMM_WORLD);
 
         double *segment_update = &(output[segment_ends[recv_chunk] -
                                          segment_sizes[recv_chunk]]);
