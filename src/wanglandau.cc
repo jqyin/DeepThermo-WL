@@ -155,7 +155,7 @@ void write_DOS_H(void)
 	{
 		//Printing Out 1D Data
 		//fprintf(ofp,"%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i]);
-		fprintf(ofp,"%g\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),1.0*wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
+		fprintf(ofp,"%.8f\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),1.0*wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
 	};
   
 	fflush(ofp);
@@ -190,9 +190,9 @@ void initWL(void)
 	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
 	//allocate storage for an array of pointers
   
-	wlH = (double*)malloc( D1BINS * sizeof(double ) );
-	wlHd = (double*)malloc( D1BINS * sizeof(double ) );
-	wlHi = (double*)malloc( D1BINS * sizeof(double ) );
+	wlH = (int*)malloc( D1BINS * sizeof(int) );
+	wlHd = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
+	wlHi = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
 	wllng = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngd = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngi = (double*)malloc( D1BINS * sizeof(double ) );

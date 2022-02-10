@@ -108,9 +108,9 @@ std::vector<size_t> AllgatherInputLengths(int size, size_t this_rank_length) {
  * (assuming no latency in connections) is constrained by the slowest interconnect between the nodes.
  *
  */
-void RingAllreduce(double* data, size_t length, double** output_ptr) {
+void RingAllreduce(double* data, size_t length, double** output_ptr, int rank, int size) {
     // Get MPI size and rank.
-    int rank;
+/*    int rank;
     int mpi_error = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if(mpi_error != MPI_SUCCESS)
         throw std::runtime_error("MPI_Comm_rank failed with an error");
@@ -119,7 +119,7 @@ void RingAllreduce(double* data, size_t length, double** output_ptr) {
     mpi_error = MPI_Comm_size(MPI_COMM_WORLD, &size);
     if(mpi_error != MPI_SUCCESS)
         throw std::runtime_error("MPI_Comm_size failed with an error");
-
+*/
     // Check that the lengths given to every process are the same.
     /*std::vector<size_t> lengths = AllgatherInputLengths(size, length);
     for(size_t other_length : lengths) {

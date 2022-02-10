@@ -32,7 +32,8 @@ GLOBAL int D1BINS;  //Number of Bins in the DOS and Histogram
 GLOBAL double invdWLD1;  //Stores inverse bin widths
 
 //For 2D WL simulations
-GLOBAL double *wlHd, *wlHi, *wlH;  //the Wang-Landau accumulated histogram
+GLOBAL int *wlH;  //the Wang-Landau accumulated histogram
+GLOBAL unsigned short *wlHd, *wlHi;  //the Wang-Landau accumulated histogram
 GLOBAL double *wllng, *wllngd, *wllngi;  //the Wang-Landau natural log of the density of states
 GLOBAL double lnwlf;  //natural log of the Wang-Landau update factor, f
 GLOBAL int *mask;

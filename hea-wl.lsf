@@ -14,6 +14,15 @@ module unload darshan-runtime
 
 echo $model_size
 
+export PAMI_IBV_ENABLE_DCT=0
+export PAMI_ENABLE_STRIPING=0
+export PAMI_IBV_ADAPTER_AFFINITY=1
+export PAMI_IBV_DEVICE_NAME="mlx5_0:1"
+export PAMI_IBV_DEVICE_NAME_1="mlx5_3:1"
+
+ENABLE_SHARP="-E HCOLL_MAIN_IB=mlx5_0:1 -E HCOLL_ENABLE_SHARP=2 -E HCOLL_SHARP_NP=2 -E SHARP_COLL_LOG_LEVEL=3 -E HCOLL_BCOL_P2P_ALLREDUCE_SHARP_MAX=2048 -E SHARP_COLL_JOB_QUOTA_OSTS=64 -E SHARP_COLL_POLL_BATCH=1 -E SHARP_COLL_SHARP_ENABLE_MCAST_TARGET=0 -E SHARP_COLL_ENABLE_MCAST_TARGET=0 -E SHARP_COLL_JOB_QUOTA_PAYLOAD_PER_OST=256"
+
+ENABLE_HCOLL="-mca coll_hcoll_enable 1 -mca coll_hcoll_np 0 -mca coll ^basic -mca coll ^ibm -HCOLL -FCA"
 
 NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch | wc -l)
 
@@ -21,6 +30,6 @@ NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch |
 
 #ssh $head nvidia-smi stats -d gpuUtil,memUtil -f $(pwd)/log.gpu.n${NODES}.${LSB_JOBID} &
 
-jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed ./hea-wl wlrun1D.input 123
+jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed $ENABLE_SHARP --smpiargs="$ENABLE_HCOLL" ./hea-wl wlrun1D.input 123
 
 #jskill all

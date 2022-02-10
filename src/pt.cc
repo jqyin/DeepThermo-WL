@@ -337,7 +337,8 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 					//t4 = time(NULL);
 					t4 = std::chrono::high_resolution_clock::now();
 					std::chrono::duration<double, std::milli> ms_double = t4 - t3;
-					fprintf(ofp_time, "infers/ms: %f\n", 1.0*NE*N*N*N/ms_double.count());
+					fprintf(ofp_time, "infers/ms: %f\n", 1.0*N*N*N/ms_double.count());
+					fflush(ofp_time);
 				}
 
 			}

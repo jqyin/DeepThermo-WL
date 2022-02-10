@@ -18,13 +18,13 @@ NBINTERACTION  1
 
 ### Wang-Landau ########################################
 ### Bin Width for Primary Sampling Direction ###########
-dWLD1 0.005
+dWLD1 0.004
 
 ### MAXimum Boundary for Primary Sampling Direction ####
-WLD1min  -1.76657
+WLD1min  -1.76675
 
 ### MINimum Boundary for Primary Sampling Direction ####
-WLD1max  -1.763
+WLD1max  -1.7630
 
 ### Flatness Criteria (min of hist / avg of hist) ######
 Flatness  0.6
@@ -66,7 +66,7 @@ MTf  1000.0
 MdT  0.1
 
 ### Number of MC Samples taken in the Seq() function ###
-MSAMPS  1.0e0
+MSAMPS  1.0e1
 
 ### Number of Samples separating data in Seq() #########
 MSEP  1.0e0

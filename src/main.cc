@@ -93,22 +93,28 @@ int main(int argc, char *argv[])
 			sweepWL(N*N*N/nprocs, 1);
 			IterSweeps+=1;
 			TotalSweeps+=1; 
-			if( (TotalSweeps % 10) == 0)
+			if( (TotalSweeps % 1) == 0)
 			{
-				if(TotalSweeps == 10 && myrank == 0)
+				MPI_Barrier(MPI_COMM_WORLD);
+				if(IterSweeps == 10 && myrank == 0)
 					tik = std::chrono::high_resolution_clock::now();
-				RingAllreduce(wllngi,msgSize,&wllngd);
-				RingAllreduce(wlHi,msgSize,&wlHd);
+#ifdef COMM_RING
+				RingAllreduce(wllngi,msgSize,&wllngd,myrank,nprocs);
+				RingAllreduce(wlHi,msgSize,&wlHd,myrank,nprocs);
+				MPI_Barrier(MPI_COMM_WORLD);
+#else
 				//MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				if(TotalSweeps == 10 && myrank == 0)
+				MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
+				MPI_Barrier(MPI_COMM_WORLD);
+#endif
+				if(IterSweeps == 10 && myrank == 0)
 					tok = std::chrono::high_resolution_clock::now();
 			        for(i=0;i<D1BINS;i++){
 					wlH[i] += wlHd[i];
-					wllng[i] += wllngd[i];
+					wllng[i] += wlHd[i]*lnwlf;    //wllngd[i];
 				}	
 				memset(wllngi, 0, D1BINS*sizeof(double));
-				memset(wlHi, 0, D1BINS*sizeof(double));
+				memset(wlHi, 0, D1BINS*sizeof(unsigned short));
 				tmp_flat=flatWL();
 				if( (IterSweeps %100)==0 &&  myrank == 0)
 					write_DOS_H();
