@@ -21,10 +21,10 @@ NBINTERACTION  1
 dWLD1 0.004
 
 ### MAXimum Boundary for Primary Sampling Direction ####
-WLD1min  -1.76675
+WLD1min  -1.76412
 
 ### MINimum Boundary for Primary Sampling Direction ####
-WLD1max  -1.7630
+WLD1max  -1.76130
 
 ### Flatness Criteria (min of hist / avg of hist) ######
 Flatness  0.6

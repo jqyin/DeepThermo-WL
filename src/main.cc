@@ -26,6 +26,7 @@ int main(int argc, char *argv[])
 	FILE *ofp_run, *ofp_comm;
 	char s[512];
 	double tmp_flat=0.0, volume;
+	double ptEmin, ptEmax;
 	int nT;
 	time_t start, end;
 	std::chrono::high_resolution_clock::time_point tik,tok;
@@ -41,7 +42,7 @@ int main(int argc, char *argv[])
         std::string model_dir;
         SessionOptions options;
         options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%6));
-        model_dir = "./models/exported/fp32-opt/medium/MoNbTaVW/model_MoNbTaVW";
+        model_dir = "./models/exported/fp16-opt/large/MoNbTaVW/model_MoNbTaVW";
         model.LoadModel(model_dir, options);
         
 
@@ -62,8 +63,15 @@ int main(int argc, char *argv[])
         currEtot = Etot();
 	printf("Etot = %g\n", currEtot);
 
-	//warm up
+	//warm up with parallel tempering 
 	parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,0);
+	MPI_Allreduce(&currEtot, &ptEmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+	MPI_Allreduce(&currEtot, &ptEmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+	if(ptEmin/N_3 < WLD1min)
+		WLD1min = ptEmin/N_3;
+	if(ptEmax/N_3 > WLD1max)
+		WLD1max = ptEmax/N_3;
+	printf("ptEmin = %g  ptEmax = %g\n", ptEmin, ptEmax);
 
         if(myrank == 0){
                 ofp_run=fopen("run.dat","a");

@@ -2,10 +2,10 @@
 #BSUB -P stf218
 #BSUB -J restart
 #BSUB -o logs.o%J
-#BSUB -W 0:30
-#BSUB -nnodes 1
+#BSUB -W 0:10
+#BSUB -nnodes 16
 #BSUB -alloc_flags "smt4 nvme"
-##BSUB -q debug
+#BSUB -q debug
 
 
 model_size=$1 
@@ -30,6 +30,10 @@ NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch |
 
 #ssh $head nvidia-smi stats -d gpuUtil,memUtil -f $(pwd)/log.gpu.n${NODES}.${LSB_JOBID} &
 
-jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed $ENABLE_SHARP --smpiargs="$ENABLE_HCOLL" ./hea-wl wlrun1D.input 123
-
+if (( NODES > 256 ))
+then 
+    jsrun -n${NODES} -a 6 -c 42  -g 6 -r 1 --bind=proportional-packed:7 --launch_distribution=packed $ENABLE_SHARP --smpiargs="$ENABLE_HCOLL" ./hea-wl wlrun1D.input 123
+else
+    jsrun -n${NODES} -a 6 -c 42   -r 1 --bind=proportional-packed:7 --launch_distribution=packed ./hea-wl wlrun1D.input 123
+fi
 #jskill all

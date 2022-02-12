@@ -16,7 +16,7 @@
 #define MAX_NEIGHBORS 300
 
 static const char* element[]={"HEA", "Mo","Nb","Ta","V","W"};
-static const double mlp_intercept = -23963; //mev
+static const double mlp_intercept = -23926.1; //mev
 static const double reglin_intercept = -1.2702430255548436; //Ry
 static const int  E_0 = 500;
 static const int k_f = 10;

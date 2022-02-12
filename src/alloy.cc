@@ -288,14 +288,14 @@ double Etot(){
 	E = 0.0;
 
 #ifdef DL_MODEL
-	tensorflow::TensorShape data_shape({1, SH*NE*(NE-1)/2});
-        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-        auto data_ = data.flat<float>().data();
+	tensorflow::TensorShape data_shape({1, 1, SH*NE*(NE-1)/2});
+        tensorflow::Tensor data(tensorflow::DT_HALF, data_shape);
+        auto data_ = data.flat<Eigen::half>().data();
         int cnt=0;
        	for(int shell = 0; shell < SH; shell++){
                 for(int i =0; i < NE-1; i++){
                         for(int j =i+1; j < NE; j++){
-				data_[cnt++] = invN*W[i][j][shell]/NS[shell];
+				data_[cnt++] = (Eigen::half)(invN*W[i][j][shell]/NS[shell]);
 			}
 		}
 	}
