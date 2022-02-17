@@ -42,7 +42,8 @@ int main(int argc, char *argv[])
         std::string model_dir;
         SessionOptions options;
         options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%6));
-        model_dir = "./models/exported/fp16-opt/large/MoNbTaVW/model_MoNbTaVW";
+        //model_dir = "./models/exported/fp32-opt/large/MoNbTaTiW/model_MoNbTaTiW";
+        model_dir = "./models/exported/fp16-opt/large/MoNbTaW/model_MoNbTaW";
         model.LoadModel(model_dir, options);
         
 
@@ -89,7 +90,7 @@ int main(int argc, char *argv[])
 		IterSweeps=0;
 		resetWL();
 		tmp_flat=0.0;
-		//MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Barrier(MPI_COMM_WORLD);
 #ifdef  GLOBAL_UPDATE
 		//if(myrank == 0)
 		global_update();

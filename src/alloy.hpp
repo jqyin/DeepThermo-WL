@@ -7,7 +7,7 @@
 #define GLOBAL extern
 #endif 
 #include "model.hpp"
-#define NE 5
+#define NE 4
 #define SH 6   // number of shells
 #define O_SH 1   // number of shells
 #define Latt_Const 6.73 // A
@@ -15,11 +15,11 @@
 #define E_scale 13605.69301 // Ry -> mev
 #define MAX_NEIGHBORS 300
 
-static const char* element[]={"HEA", "Mo","Nb","Ta","V","W"};
-static const double mlp_intercept = -23926.1; //mev
+static const char* element[]={"HEA", "Mo","Nb","Ta","W"};
+static const double mlp_intercept = -17377.2;//-21834;//-23926.1; //mev
 static const double reglin_intercept = -1.2702430255548436; //Ry
-static const int  E_0 = 500;
-static const int k_f = 10;
+static const int  E_0 = 50;
+static const int k_f = 5;
 static const int lngk_f = log(k_f);
 
 GLOBAL heaModel model;

@@ -18,13 +18,13 @@ NBINTERACTION  1
 
 ### Wang-Landau ########################################
 ### Bin Width for Primary Sampling Direction ###########
-dWLD1 0.004
+dWLD1 0.0055
 
 ### MAXimum Boundary for Primary Sampling Direction ####
-WLD1min  -1.76412
+WLD1min  -1.2805
 
 ### MINimum Boundary for Primary Sampling Direction ####
-WLD1max  -1.76130
+WLD1max  -1.2770
 
 ### Flatness Criteria (min of hist / avg of hist) ######
 Flatness  0.6
@@ -60,7 +60,7 @@ MetropolisSampling  0
 MTi  10.0
 
 ### Final Temperature for simple Seq() loop ############
-MTf  1000.0
+MTf  2000.0
 
 ### Final Temperature for simple Seq() loop ############
 MdT  0.1

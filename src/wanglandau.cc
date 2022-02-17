@@ -14,7 +14,7 @@ extern int myrank, nprocs;
 double flatWL(void)
 {
 	int i,k;
-	double avg,min;
+	double Hi,avg,min;
   
 	k=0;  //number of sampled bins, used to calculate average
 	min=1.0e300;  //the minimum sampled bin in the histogram wlH[][]
@@ -22,22 +22,23 @@ double flatWL(void)
 	numbelow_flat=0.0;  //number of bins below the flatness criteria
   
 	//This loop finds the flatness and the number of unsampled bins
-	for(i=0;i<D1BINS;++i)
+	for(i=0;i<D1BINS;++i){
+		Hi = wlH[i]*((i < E_0)? k_f : 1.0);
 		if(mask[i]==1)
 		{			
 			//minimum of the histogram
-			if( (wlH[i]<min) )
+			if( (Hi<min) )
 			{
-				min=wlH[i];
+				min=Hi;
 			};
 			//average of the histogram
-			if( (wlH[i]>0.0) )
+			if( (Hi>0.0) )
 			{
-				avg+=wlH[i];
+				avg+=Hi;
 				k+=1;
 			};	
 		};
-  
+  	}
 	avg/=1.0*k;  //Calculates the average height of the histogram (for  wlH > 0.0)
 	if(k==0)
 		avg=1.0;  //This keeps from dividing by zero
@@ -324,7 +325,7 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	if(fti < LOWESTE+10 && fti >= LOWESTE)
 	{	
 		if(! list[fti - LOWESTE]){
-			write_xyz(fti - LOWESTE);
+			//write_xyz(fti - LOWESTE);
 			list[fti - LOWESTE] = true;
 		}
 		//fprintf(stderr,"New Lowest E config %g\n\n",LOWESTE);
@@ -341,9 +342,9 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 		}
 		if(fti >=D1BINS){*/
 			wlHi[iti]+=1;
-			wllngi[iti]+=lnwlf;	
+			//wllngi[iti]+=lnwlf;	
 			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
-			//wllngi[iti]+= (iti > E_0)? lnwlf*lngk_f: lnwlf;	
+			wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
 			return 0;
 		//}
 
@@ -360,18 +361,18 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 			//accept
 			acceptrot[iti] += 1;
 	    		wlHi[fti]+=1;
-			wllngi[fti]+=lnwlf;		
+			//wllngi[fti]+=lnwlf;		
 			//wlHi[fti]+= (fti > E_0)? 1.0/(1.0+k_f): 1.0;
-			//wllngi[fti]+= (fti > E_0)? lnwlf*lngk_f: lnwlf;	
+			wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;	
 			return 1;
 		}
 		else
 		{
 			//reject
 			wlHi[iti]+=1;
-			wllngi[iti]+=lnwlf;	
+			//wllngi[iti]+=lnwlf;	
 			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
-			//wllngi[iti]+= (iti > E_0)? lnwlf*lngk_f: lnwlf;	
+			wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
 			return 0;
 		};
     	};
