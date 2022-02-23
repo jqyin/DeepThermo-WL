@@ -21,7 +21,7 @@ NBINTERACTION  1
 dWLD1 0.0055
 
 ### MAXimum Boundary for Primary Sampling Direction ####
-WLD1min  -1.2805
+WLD1min  -1.2808
 
 ### MINimum Boundary for Primary Sampling Direction ####
 WLD1max  -1.2770

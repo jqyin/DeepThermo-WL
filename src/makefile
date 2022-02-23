@@ -1,10 +1,11 @@
 CC = mpic++
 TF_DIR = /sw/summit/open-ce/anaconda-base/envs/open-ce-1.2.0-py38-0
-Flag = -O2 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++11
-LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so
+Flag = -O2 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -isystem /gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++17
+LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so  -Wl,-rpath,/gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/lib -L/gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/lib  -lsmartredis
 Model_Flag ?= -DDL_MODEL
 WL_Flag ?= -DGLOBAL_UPDATE
 Comm_Flag ?= 
+Backend_Flag ?=
 
 relax_dir = relax
 hist_dir = hist

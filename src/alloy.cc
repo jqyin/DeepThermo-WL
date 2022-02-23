@@ -9,8 +9,10 @@
 #include "alloy.hpp"
 #include "rand.hpp"
 #include "pt.hpp"
+#include "client.hpp"
 #include "wanglandau.hpp"
 
+extern std::string model_name;
 extern int myrank, nprocs;
 void initialize(){
 	//maximum rotational angle;
@@ -288,6 +290,8 @@ double Etot(){
 	E = 0.0;
 
 #ifdef DL_MODEL
+
+#ifdef Backend_TF
 	tensorflow::TensorShape data_shape({1, 1, SH*NE*(NE-1)/2});
         tensorflow::Tensor data(tensorflow::DT_HALF, data_shape);
         auto data_ = data.flat<Eigen::half>().data();
@@ -307,6 +311,52 @@ double Etot(){
         model.Predict(data, outputs);
 	E = outputs[0].flat<float>().data()[0] + mlp_intercept;
         E = E/E_scale; 
+#else
+        float data[SH*NE*(NE-1)/2];
+	std::string data_key, eng_key;
+	std::string rankID = std::to_string(myrank);
+        int cnt=0;
+       	for(int shell = 0; shell < SH; shell++){
+                for(int i =0; i < NE-1; i++){
+                        for(int j =i+1; j < NE; j++){
+				data[cnt++] = (invN*W[i][j][shell]/NS[shell]);
+			}
+		}
+	}
+
+						
+	data_key = "data_"+rankID;
+	eng_key = "eng_"+rankID;
+
+	//if (MC == 5&& myrank ==0)
+	//	t1 = std::chrono::high_resolution_clock::now();
+	(*SRclient).put_tensor(data_key, data, {1,1,SH*NE*(NE-1)/2}, SmartRedis::TensorType::flt,
+				SmartRedis::MemoryLayout::contiguous);
+	//if (MC == 5&& myrank ==0)
+	//	t2 = std::chrono::high_resolution_clock::now();
+        //std::cout << model_name << std::endl;
+	(*SRclient).run_model(model_name+rankID, {data_key}, {eng_key});
+	//if (MC == 5 && myrank ==0)
+	//	t3 = std::chrono::high_resolution_clock::now();
+	//std::vector<float> eng;
+        float eng;
+	(*SRclient).unpack_tensor(eng_key, &eng, {1}, SmartRedis::TensorType::flt,
+                                SmartRedis::MemoryLayout::contiguous);
+	//if (MC == 5 && myrank ==0)
+		//t4 = std::chrono::high_resolution_clock::now();
+	E = eng + mlp_intercept;
+        E = E/E_scale;
+
+	/*if (MC == 5 && myrank == 0){
+		std::chrono::duration<double, std::milli> ms_double = t2 - t1;
+		std::cout << "put_tensor: " << ms_double.count() << std::endl;
+		ms_double = t3-t2; 
+		std::cout << "run_model: " << ms_double.count() << std::endl;
+		ms_double = t4-t3; 
+		std::cout << "unpack_tensor: " << ms_double.count() << std::endl;
+	}*/
+#endif
+
 
 #else // regression model 
        	for(int shell = 0; shell < SH; shell++){
@@ -457,7 +507,7 @@ void write_pos(){
 
 void write_xyz(int frame)
 {
-  int i,j,k,cnt;
+  int i,j,k,cnt, shell;
   char s[512];
   FILE *ofp;
  
@@ -465,6 +515,16 @@ void write_xyz(int frame)
   ofp=fopen(s,"ab+");
   fprintf(ofp, "%d\n", N_3); 
   fprintf(ofp,"Eng = %.8lg  MC_step = %d\n", currEtot, frame);
+
+  //sum = 0.0;
+  for(shell = 0; shell < SH; shell++)
+        for(i =0; i < NE-1; i++)
+                for(j =i+1; j < NE; j++){
+                        fprintf(ofp, "%.8lg\t",1.0*W[i][j][shell]/NS[shell]/N_3);
+                        //sum += 1.0*W[i][j][shell]/NS[shell]/N_3;
+                }
+  fprintf(ofp, "\n");
+
 
   for(i=0;i<N;i++)
           for(j=0; j<N;j++)

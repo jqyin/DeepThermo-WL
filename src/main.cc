@@ -13,6 +13,7 @@
 #include "pt.hpp"
 #include "wanglandau.hpp"
 #include "allreduce.h"
+#include "client.hpp"
 
 int nprocs;
 int myrank;
@@ -27,7 +28,7 @@ int main(int argc, char *argv[])
 	char s[512];
 	double tmp_flat=0.0, volume;
 	double ptEmin, ptEmax;
-	int nT;
+	int nT, nsweeps;
 	time_t start, end;
 	std::chrono::high_resolution_clock::time_point tik,tok;
 
@@ -38,15 +39,26 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[4])*myrank);
 	shelltimeseed(rand()+19*myrank+19273);
 
-        //start tensorflow session;
         std::string model_dir;
-        SessionOptions options;
-        options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%6));
-        //model_dir = "./models/exported/fp32-opt/large/MoNbTaTiW/model_MoNbTaTiW";
-        model_dir = "./models/exported/fp16-opt/large/MoNbTaW/model_MoNbTaW";
-        model.LoadModel(model_dir, options);
-        
+        //model_dir = "./models/exported/mixed-opt/dense/MoNbTaW";
+        model_dir = "./models/exported/mixed-opt/conv/MoNbTaW";
+        //model_dir = "./models/exported/fp32-opt/small/MoNbTaW";
+        //model_dir = "./models/exported/fp32-opt/large/MoNbTaW/model_MoNbTaW";
+        //model_dir = "./models/exported/fp16-opt/large/MoNbTaW/model_MoNbTaW";
 
+#ifdef DL_MODEL
+
+#ifdef BACKEND_TF
+        //start tensorflow session;
+        SessionOptions options;
+        options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%GPUperNode));
+        model.LoadModel(model_dir, options);
+#else
+	LoadClientModel(model_dir);	
+
+#endif
+
+#endif
 	//Error message if the number of arguments is incorrect
 	if (argc != 3 && myrank == 0) ErrorMsg(0, "");
 
@@ -85,6 +97,7 @@ int main(int argc, char *argv[])
         numf=1;
 	STARTED = 0;
 	size_t msgSize = D1BINS*sizeof(double);
+        nsweeps = N*N*N/nprocs > 0 ? N*N*N/nprocs : 1 ;
 	for(lnwlf=1.0;lnwlf>ModFactorFinal;lnwlf=lnwlf/IterationFactor)
 	{
 		IterSweeps=0;
@@ -99,7 +112,7 @@ int main(int argc, char *argv[])
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
-			sweepWL(N*N*N/nprocs, 1);
+			sweepWL(nsweeps, 1);
 			IterSweeps+=1;
 			TotalSweeps+=1; 
 			if( (TotalSweeps % 1) == 0)

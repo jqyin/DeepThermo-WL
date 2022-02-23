@@ -45,7 +45,7 @@ GLOBAL double dGR;
 GLOBAL double GRmax,GRmin;
 
 GLOBAL int LOWESTE;
-GLOBAL bool list[20];
+GLOBAL bool list[1000];
 
 void initWL(void); //initializes for WL
 void freeWL();

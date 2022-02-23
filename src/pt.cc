@@ -403,7 +403,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 	// output spin configuration;
 	if(myrank == 0)
 		write_pos(); 
-	write_xyz(SAMPS);
+	//write_xyz(SAMPS);
 	avgE/=1.0*SAMPS;
         avgE2/=1.0*SAMPS;
 	for(i=0; i<(NE+1);i++){

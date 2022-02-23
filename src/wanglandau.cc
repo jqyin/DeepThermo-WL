@@ -224,7 +224,7 @@ void initWL(void)
 		acceptrot[i]=0;
 
 	};
-	for(i = 0 ; i<20;i++)
+	for(i = 0 ; i<1000;i++)
 		list[i] = false;
 
 	//Run the standard MC routine until the configuration has energy within the WL simulation energy range
@@ -322,7 +322,7 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	fti=(int) ((Ef*invN-WLD1min)*invdWLD1);
 
 	//This statement simply prints out the lowest 20 energy configurations;
-	if(fti < LOWESTE+10 && fti >= LOWESTE)
+	if(fti < LOWESTE+300 && fti >= LOWESTE)
 	{	
 		if(! list[fti - LOWESTE]){
 			//write_xyz(fti - LOWESTE);
