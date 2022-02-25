@@ -46,6 +46,7 @@ void ini_sys(){
         int i;
 
 	Atom=(short*)malloc(sizeof(short)*N_3);
+	Atomo=(short*)malloc(sizeof(short)*N_3);
 	//Atom=(uint8_t*)malloc(sizeof(uint8_t)*N_3);
 	cluster = (bool*)malloc(sizeof(bool)*N_3);
 	att=acc=0;
@@ -199,6 +200,7 @@ void mchybrid(int mode){
 	for(cnt=0; cnt<N*N*N; cnt++){
 		Rot(mode);
 	}
+	//vae_update(mode);
 /*	for(i = 0; i < N; i++)
 		for(j = 0; j < N; j++)
 			for(k = 0; k < N; k++)

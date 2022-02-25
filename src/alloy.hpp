@@ -22,6 +22,9 @@ static const int  E_0 = 50;
 static const int k_f = 1;
 static const int lngk_f = log(k_f);
 
+static const double Z_R = 10;
+GLOBAL int VAE_D, SHIFT; 
+
 GLOBAL heaModel model;
 GLOBAL bool* cluster;
 GLOBAL double* Mavg;
@@ -34,6 +37,8 @@ GLOBAL int attd;
 GLOBAL int accd;
 GLOBAL double D, DD; // step length;
 GLOBAL short* Atom; 
+GLOBAL short* Atomo; 
+GLOBAL int* elist[NE]; 
 //GLOBAL uint8_t* Atom; 
 GLOBAL int** inputPos; 
 GLOBAL double J[NE][NE][SH];
@@ -66,6 +71,7 @@ double Esite(int i, int j, int k);
 
 void wolff(int i, int j, int k, double rx, double ry, double rz);
 void Rot(int);
+void vae_update(int);
 void Vol();
 void O(double* op);
 void write_pos();

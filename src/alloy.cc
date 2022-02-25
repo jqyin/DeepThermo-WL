@@ -21,6 +21,9 @@ void initialize(){
 
 	ini_coupling();
 	invN=1.0/(N*N*N);
+		
+	SHIFT = N-1; 
+	VAE_D = 2*(N-1)+ SHIFT + 1; 
 }
 
 void ini_coupling(){
@@ -85,7 +88,8 @@ void ini_coupling(){
         for(i=0; i<N_3; i++){
                 inputPos[i] = (int*)malloc(sizeof(int)*Nneighbors);
         }
-
+	for(t=0;t<NE;t++)
+		elist[t] = (int*)malloc(sizeof(int)*N_3);
 }
 
 void shuffle(int *array, size_t n)
@@ -489,6 +493,113 @@ void Rot(int mode){
 		}
     	}
 
+}
+
+void sphere(float* npos){
+	double v1, v2,v3,a;
+
+	v1 = (2.0*randd1()-1.0);
+	v2 = (2.0*randd1()-1.0);
+	a = v1*v1 +v2*v2;
+	while(a>1.0){
+		v1 = (2.0*randd1()-1.0);
+		v2 = (2.0*randd1()-1.0);	
+		a = v1*v1+v2*v2;
+	}
+	v3 = 1-2.0*a;
+	a = sqrt(1-a);
+	v1 = 2.0*a*v1;
+	v2 = 2.0*a*v2;
+
+	npos[0] = Z_R*v1;
+	npos[1] = Z_R*v2;
+	npos[2] = Z_R*v3;
+
+}
+
+int arg_max(std::vector<float> const& vec){
+	return static_cast<int>(std::distance(vec.begin(), std::max_element(vec.begin(), vec.end())));
+}
+
+void reconstruct(float* config){
+  	int i, j, k, t, tt, id, tid;	
+	int sum[NE] = {0};
+	std::vector<float> vec(NE); 	
+	//int * elist = (int*) malloc(sizeof(int)*N_3);
+  	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++){
+		int idx = (j-i+k+SHIFT)*VAE_D*VAE_D*NE + (k-j+i+SHIFT)*VAE_D*NE + (j+i-k+SHIFT)*NE;
+		for(t=0; t<NE; t++)
+			vec[t] = config[idx+t];
+		t = arg_max(vec);
+        	Atom[i*N_2+j*N+k] = t;
+		elist[t][sum[t]++] = i*N_2+j*N+k;
+	}
+
+	// fix concentration
+	for(t=0;t<NE;t++){
+		while(sum[t] > NT[t]){
+			id = int(randd1()*sum[t]);
+			for(tt=0;tt<NE;tt++)
+				if(tt!=t && sum[tt] < NT[tt]){
+					tid = tt;
+					break;
+				}
+			Atom[elist[t][id]] = tid;
+			sum[t]--;
+			sum[tid]++; 	
+		}
+	}
+	for(t=0;t<NE;t++)
+		assert(sum[t] == NT[t]);
+	ini_apos();
+	 
+}
+
+void vae_update(int mode){
+	float z[3];
+	double E1, E2, deltaE;
+	int Wo[NE][NE][SH];
+	std::string data_key, config_key;
+	//std::vector<std::vector<std::vector<std::vector<float>>>> config;
+	std::string rankID = std::to_string(myrank);
+	float output[VAE_D*VAE_D*VAE_D*NE];
+        memcpy(Atomo, Atom, sizeof(short)*N_3);
+        memcpy(Wo, W, sizeof(int)*NE*NE*SH);
+	// sample a data point in latent space; 
+	sphere(z);
+	// decode the data point to real space; 
+	data_key = "data_"+rankID;
+	config_key = "data_"+rankID;
+        (*SRclient).put_tensor(data_key, z, {1,3}, SmartRedis::TensorType::flt,
+                                SmartRedis::MemoryLayout::contiguous);
+	(*SRclient).run_model(model_name+rankID, {data_key}, {config_key});
+	(*SRclient).unpack_tensor(config_key, &output, {VAE_D*VAE_D*VAE_D*NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+	//(*SRclient).unpack_tensor(config_key, &config, {1, VAE_D, VAE_D, VAE_D, NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::nested);
+	//for(int i=0; i< VAE_D; i++)for(int j=0; j<VAE_D; j++)for(int k=0; k<VAE_D; k++)for(int t=0; t<NE; t++)
+        reconstruct(output);
+	// measure the energy of new configuration;
+	E1 = currEtot;
+	E2 = Etot(); 
+	// update according to WL 	
+	deltaE = E2 - E1;
+        attd++;
+	if(mode == 0){//metropolis
+        	if(Metropolis(currEtot, currEtot+deltaE) == 1){// accept
+        		currEtot += deltaE; accd++;
+        	}else{//reject
+        		memcpy(Atom, Atomo, sizeof(short)*N_3);
+        		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
+		}
+	}else{//wanglandau
+        	if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
+               		currEtot += deltaE; accd++;
+        	}else{//reject
+        		memcpy(Atom, Atomo, sizeof(short)*N_3);
+        		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
+        	}
+
+		//std::cout << "E: " << currEtot << std::endl;
+	}
 }
 
 void write_pos(){

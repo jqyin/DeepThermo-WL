@@ -30,10 +30,10 @@ void LoadClientModel(std::string model_path){
  	for(int i=0; i< NE; i++)
 		hea += std::string(element[i+1]);
          
-	model_name = "model_"+hea;
+	model_name = "vae_"+hea;
         std::string model = model_path + "/" + model_name + ".pb";
         (*SRclient).set_model_from_file(model_name+std::to_string(myrank), model, "TF", "GPU", 
-				1, SH*NE*(NE-1)/2, "hea", {"input_1"}, {"Identity"});
+				1, SH*NE*(NE-1)/2, "vae", {"input_2"}, {"conv3d_transpose_4_1/Sigmoid"});
 	std::cout << model_name << " loaded: " << (*SRclient).model_exists(model_name+std::to_string(myrank)) << std::endl;
 }
 

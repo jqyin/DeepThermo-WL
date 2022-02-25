@@ -265,6 +265,7 @@ void sweepWL(int sweeps, int mode)
 		//wlhybrid();
 		Rot(mode);
 	};
+	vae_update(mode);
 }
 
 

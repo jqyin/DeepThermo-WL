@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[4])*myrank);
 	shelltimeseed(rand()+19*myrank+19273);
 
-        std::string model_dir;
+        std::string model_dir, vae_dir;
         //model_dir = "./models/exported/mixed-opt/dense/MoNbTaW";
         model_dir = "./models/exported/mixed-opt/conv/MoNbTaW";
         //model_dir = "./models/exported/fp32-opt/small/MoNbTaW";
@@ -59,6 +59,8 @@ int main(int argc, char *argv[])
 #endif
 
 #endif
+        vae_dir = "./models/vae/model";
+	LoadClientModel(vae_dir);	
 	//Error message if the number of arguments is incorrect
 	if (argc != 3 && myrank == 0) ErrorMsg(0, "");
 
