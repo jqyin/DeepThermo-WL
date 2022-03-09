@@ -505,6 +505,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 		for(n=0;n<nT;n++){
 			fprintf(ofp2,"%g\t%g\n",T[n], 1.0*accepts[n]/attempts[n]);		
 		}
+		fflush(ofp2);
 	}
 	free(Ea);
 	free(Ma);

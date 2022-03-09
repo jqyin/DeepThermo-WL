@@ -12,7 +12,7 @@
 #include "client.hpp"
 #include "wanglandau.hpp"
 
-extern std::string model_name;
+extern std::string encoder_name, decoder_name;
 extern int myrank, nprocs;
 void initialize(){
 	//maximum rotational angle;
@@ -24,6 +24,12 @@ void initialize(){
 		
 	SHIFT = N-1; 
 	VAE_D = 2*(N-1)+ SHIFT + 1; 
+	PAD = int((ceil(1.0*VAE_D/16)*16 - VAE_D)/2);
+        VAE_D += PAD*2; 
+	//z[0]=z[1]=z[2]=0.0;
+	
+	inputConfig = (float*) malloc(sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
+	memset(inputConfig,0,sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
 }
 
 void ini_coupling(){
@@ -470,10 +476,10 @@ void Rot(int mode){
         	E2 = Etot();
 
         	deltaE = E2 - E1;
-        	attd++;
+        	//attd++;
 		if(mode == 0){//metropolis
         		if(Metropolis(currEtot, currEtot+deltaE) == 1){// accept
-        			currEtot += deltaE; accd++;
+        			currEtot += deltaE; //accd++;
         		}else{//reject
                 		Atom[i] = ai;
                 		Atom[j] = aj;
@@ -481,8 +487,8 @@ void Rot(int mode){
         		}
 		}
 		else{//wanglandau
-        		if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
-                		currEtot += deltaE; accd++;
+        		if(WangLandau(currEtot, currEtot+deltaE, mode) == 1){// accept
+                		currEtot += deltaE; //accd++;
         		}else{//reject
                 		Atom[i] = ai;
                 		Atom[j] = aj;
@@ -495,7 +501,29 @@ void Rot(int mode){
 
 }
 
-void sphere(float* npos){
+void encode(float* z){
+	int i,j,k,t; 
+	std::string z_key, config_key;
+	std::string rankID = std::to_string(myrank);
+	memset(inputConfig,0,sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
+  	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++){
+		int idx = (j-i+k+SHIFT+PAD)*VAE_D*VAE_D*NE + (k-j+i+SHIFT+PAD)*VAE_D*NE + (j+i-k+SHIFT+PAD)*NE;
+		for(t =0; t <NE; t++)
+			if(Atom[i*N_2+j*N+k]==t){
+				inputConfig[idx+t] = 1;
+				break;
+			}
+	}
+	z_key = "output_z_"+rankID;
+	config_key = "input_config_"+rankID;
+        (*SRclient).put_tensor(config_key, inputConfig, {1, VAE_D, VAE_D, VAE_D, NE}, SmartRedis::TensorType::flt,
+                                SmartRedis::MemoryLayout::contiguous);
+	(*SRclient).run_model(encoder_name+rankID, {config_key}, {z_key});
+	(*SRclient).unpack_tensor(z_key, z, {3}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+}
+
+void walk(float* npos){
+	// shhere
 	double v1, v2,v3,a;
 
 	v1 = (2.0*randd1()-1.0);
@@ -511,9 +539,16 @@ void sphere(float* npos){
 	v1 = 2.0*a*v1;
 	v2 = 2.0*a*v2;
 
-	npos[0] = Z_R*v1;
-	npos[1] = Z_R*v2;
-	npos[2] = Z_R*v3;
+	npos[0] += Z_R*v1;
+	npos[1] += Z_R*v2;
+	npos[2] += Z_R*v3; 
+	
+	// line
+	/*a = randd1()*2 - 1;
+	npos[0] += Z_R*a;
+	npos[1] += Z_R*a;
+	npos[2] += Z_R*a;*/
+	
 
 }
 
@@ -521,65 +556,80 @@ int arg_max(std::vector<float> const& vec){
 	return static_cast<int>(std::distance(vec.begin(), std::max_element(vec.begin(), vec.end())));
 }
 
-void reconstruct(float* config){
+void decode(float* z){
   	int i, j, k, t, tt, id, tid;	
 	int sum[NE] = {0};
+	int sumo[NE] = {0};
+	float output[VAE_D*VAE_D*VAE_D*NE] = {0};
 	std::vector<float> vec(NE); 	
-	//int * elist = (int*) malloc(sizeof(int)*N_3);
+	std::string z_key, config_key;
+	std::string rankID = std::to_string(myrank);
+	
+	z_key = "input_z_"+rankID;
+	config_key = "output_config_"+rankID;
+        (*SRclient).put_tensor(z_key, z, {1,3}, SmartRedis::TensorType::flt,
+                                SmartRedis::MemoryLayout::contiguous);
+	(*SRclient).run_model(decoder_name+rankID, {z_key}, {config_key});
+	(*SRclient).unpack_tensor(config_key, &output, {VAE_D*VAE_D*VAE_D*NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+
+	for(t=0;t<NE;t++)
+		memset(elist[t],-1,sizeof(int)*N_3);
   	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++){
-		int idx = (j-i+k+SHIFT)*VAE_D*VAE_D*NE + (k-j+i+SHIFT)*VAE_D*NE + (j+i-k+SHIFT)*NE;
+		int idx = (j-i+k+SHIFT+PAD)*VAE_D*VAE_D*NE + (k-j+i+SHIFT+PAD)*VAE_D*NE + (j+i-k+SHIFT+PAD)*NE;
 		for(t=0; t<NE; t++)
-			vec[t] = config[idx+t];
+			vec[t] = output[idx+t];
 		t = arg_max(vec);
         	Atom[i*N_2+j*N+k] = t;
 		elist[t][sum[t]++] = i*N_2+j*N+k;
 	}
-
-	// fix concentration
+	for(t=0;t<NE;t++)
+		sumo[t] = sum[t];
+	// fix concentration, better to take prob into account 
 	for(t=0;t<NE;t++){
 		while(sum[t] > NT[t]){
-			id = int(randd1()*sum[t]);
-			for(tt=0;tt<NE;tt++)
-				if(tt!=t && sum[tt] < NT[tt]){
-					tid = tt;
-					break;
-				}
-			Atom[elist[t][id]] = tid;
-			sum[t]--;
-			sum[tid]++; 	
+			id = int(randd1()*sumo[t]);
+			if(elist[t][id] != -1){
+				for(tt=0;tt<NE;tt++)
+					if(tt!=t && sum[tt] < NT[tt]){
+						tid = tt;
+						break;
+					}
+				Atom[elist[t][id]] = tid;
+				elist[t][id] = -1;
+				sum[t]--;
+				sum[tid]++;
+			} 	
 		}
 	}
 	for(t=0;t<NE;t++)
 		assert(sum[t] == NT[t]);
-	ini_apos();
+	ini_W();
 	 
 }
 
 void vae_update(int mode){
-	float z[3];
+	float z[3] = {0};
 	double E1, E2, deltaE;
 	int Wo[NE][NE][SH];
-	std::string data_key, config_key;
-	//std::vector<std::vector<std::vector<std::vector<float>>>> config;
-	std::string rankID = std::to_string(myrank);
-	float output[VAE_D*VAE_D*VAE_D*NE];
         memcpy(Atomo, Atom, sizeof(short)*N_3);
         memcpy(Wo, W, sizeof(int)*NE*NE*SH);
-	// sample a data point in latent space; 
-	sphere(z);
+	// encode the current config to latent space;
+	encode(z);
+        /*if(myrank == 0 && TotalSweeps%100 == 0){
+		printf("step %d before: z=(%f,%f,%f), E=%f\n", TotalSweeps, z[0], z[1], z[2], currEtot);
+		//write_xyz(TotalSweeps);
+	}*/
+	// random walk in latent space; 
+	walk(z);
 	// decode the data point to real space; 
-	data_key = "data_"+rankID;
-	config_key = "data_"+rankID;
-        (*SRclient).put_tensor(data_key, z, {1,3}, SmartRedis::TensorType::flt,
-                                SmartRedis::MemoryLayout::contiguous);
-	(*SRclient).run_model(model_name+rankID, {data_key}, {config_key});
-	(*SRclient).unpack_tensor(config_key, &output, {VAE_D*VAE_D*VAE_D*NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
-	//(*SRclient).unpack_tensor(config_key, &config, {1, VAE_D, VAE_D, VAE_D, NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::nested);
-	//for(int i=0; i< VAE_D; i++)for(int j=0; j<VAE_D; j++)for(int k=0; k<VAE_D; k++)for(int t=0; t<NE; t++)
-        reconstruct(output);
+        decode(z);
 	// measure the energy of new configuration;
 	E1 = currEtot;
 	E2 = Etot(); 
+        /*if(myrank == 0 && TotalSweeps%100==0){
+		printf("step %d after: z=(%f,%f,%f), E=%f\n", TotalSweeps, z[0], z[1], z[2], E2);
+		//write_xyz(TotalSweeps+1);
+	}*/
 	// update according to WL 	
 	deltaE = E2 - E1;
         attd++;
@@ -591,14 +641,12 @@ void vae_update(int mode){
         		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
 		}
 	}else{//wanglandau
-        	if(WangLandau(currEtot, currEtot+deltaE) == 1){// accept
+        	if(WangLandau(currEtot, currEtot+deltaE, mode) == 1){// accept
                		currEtot += deltaE; accd++;
         	}else{//reject
         		memcpy(Atom, Atomo, sizeof(short)*N_3);
         		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
         	}
-
-		//std::cout << "E: " << currEtot << std::endl;
 	}
 }
 

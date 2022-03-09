@@ -3,6 +3,7 @@
 #include <math.h>
 #include<memory.h>
 #include<assert.h>
+#include "mpi.h"
 
 #include "rand.hpp"
 #include "wanglandau.hpp"
@@ -191,10 +192,13 @@ void initWL(void)
 	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
 	//allocate storage for an array of pointers
   
-	wlH = (int*)malloc( D1BINS * sizeof(int) );
+	wlH = (double*)malloc( D1BINS * sizeof(double) );
+	//wlHd = (int*)malloc( D1BINS * sizeof(int) );
+	//wlHi = (int*)malloc( D1BINS * sizeof(int) );
 	wlHd = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
 	wlHi = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
 	wllng = (double*)malloc( D1BINS * sizeof(double ) );
+	wllng_prior = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngd = (double*)malloc( D1BINS * sizeof(double ) );
 	wllngi = (double*)malloc( D1BINS * sizeof(double ) );
 	mask = (int*)malloc( D1BINS * sizeof(int ) );
@@ -214,6 +218,7 @@ void initWL(void)
 	{
 
 		wllng[i]=0.0;
+		wllng_prior[i]=0.0;
 		wllngd[i]=0.0;
 		wllngi[i]=0.0;
 		wlH[i]=0;
@@ -246,6 +251,7 @@ void freeWL(){
 	int i;
 	free(wlH);
 	free(wllng);
+	free(wllng_prior);
 	free(wlHi);
 	free(wllngi);
 	free(wlHd);
@@ -258,29 +264,68 @@ void freeWL(){
 
 }
 //attempts to run one WL hybrid move per bin
-void sweepWL(int sweeps, int mode)
+void sweepWL(int nsweeps, int mode)
 {
-	for(int i=0;i<sweeps;++i)
+	for(int i=0;i<nsweeps;++i)
    	{
-		//wlhybrid();
 		Rot(mode);
-	};
-	vae_update(mode);
+		
+	}
 }
 
 
-//excutes all of the combined MC moves, performs one step of each type of move, and one sweep of diffusion moves
-void wlhybrid(void)
-{
-	int i,j,k;
-	for(i=0;i<N*N*N;++i){
-		Rot(1);
-	} 
+void global_update(int nsweeps, double Flat){
+	int i;
+	double tmp_flat = 0.0;
+	double maxg=-1.0e300;
+	double ming=1.0e300;
+	FILE * fp;
+	while(tmp_flat <= Flat)
+	{		
+		sweepWL(nsweeps, 2);
+		vae_update(2);
+		IterSweeps+=1;
+		TotalSweeps+=1; 
+		if( (TotalSweeps % 1) == 0)
+		{
+			MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
+			for(i=0;i<D1BINS;i++){
+				wlH[i] += wlHd[i];
+				wllng_prior[i] += wlHd[i]*lnwlf;    //wllngd[i];
+			}	
+			memset(wllngi, 0, D1BINS*sizeof(double));
+			//memset(wlHi, 0, D1BINS*sizeof(int));
+			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
+			tmp_flat=flatWL();
+			if( (IterSweeps %100)==0 &&  myrank == 0)
+				write_DOS_H();
+		}
+	}
+
+	for(i=0;i<D1BINS;++i)
+	{
+		if((wllng_prior[i]>maxg) && (mask[i]==1))
+			maxg=wllng_prior[i];
+		if((wllng[i]<ming) && (mask[i]==1))
+			ming=wllng[i];
+	}
+	if(myrank == 0)
+		fp = fopen("global-update-prior.dat", "w");
+	for(i=0;i<D1BINS;++i){
+                //wllng_prior[i] = KAPA*(wllng_prior[i]-ming)/(maxg-ming)*lnwlf;
+                wllng_prior[i] = wllng_prior[i]*lnwlf;
+		wllng[i] += wllng_prior[i];	
+		if(myrank == 0)
+			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min, wllng_prior[i]);
+			//fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min,(wllng_prior[i]-maxg)*lnwlf);
+	}
+	if(myrank == 0)
+		fclose(fp);
+        
+	resetWL();
 	
-}
-
-void global_update(){
-	int i,j;
+	
+	/*int i,j;
 	double dg;
 	FILE * fp;
 	double w;
@@ -295,7 +340,7 @@ void global_update(){
 				dg = KAPA*lnwlf * exp( -LAMDA/(wllng[i]-w) );
 				wllng[i] += dg;
 			}
-			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min,wllng[i]);
+			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min, dg); //wllng[i]);
 		}
 		fclose(fp);
 	}else{ // first iteration;
@@ -305,13 +350,12 @@ void global_update(){
 			wllng[i] += dg;
 		}
 	
-	}
-//	KAPA = sqrt(KAPA);
+	}*/
 }
 
 
 //routine to encapsulate the WangLandau algorithm, returns 1 if accepted and 0 if rejected
-int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
+int WangLandau(double Ei, double Ef, int mode) //, double Enbi, double Enbf)
 {
 	int iti;//indices of initial config
 	int fti;//indices of final config
@@ -323,7 +367,7 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	fti=(int) ((Ef*invN-WLD1min)*invdWLD1);
 
 	//This statement simply prints out the lowest 20 energy configurations;
-	if(fti < LOWESTE+300 && fti >= LOWESTE)
+	if(fti < LOWESTE+10 && fti >= LOWESTE)
 	{	
 		if(! list[fti - LOWESTE]){
 			//write_xyz(fti - LOWESTE);
@@ -353,9 +397,14 @@ int WangLandau(double Ei, double Ef) //, double Enbi, double Enbf)
 	else
     	{
 		//inside of bounds
-
-		lngi=wllngi[iti] + wllng[iti];
-		lngf=wllngi[fti] + wllng[fti];
+		if(mode == 1){
+			lngi=wllngi[iti] + wllng[iti];
+			lngf=wllngi[fti] + wllng[fti];
+		}
+		else{//prior
+			lngi=wllngi[iti] + wllng[iti] + wllng_prior[iti];
+			lngf=wllngi[fti] + wllng[fti] + wllng_prior[fti];
+		}
       		R=exp(lngi-lngf);
 		if(randd1()<R)
 		{

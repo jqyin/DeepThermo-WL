@@ -18,12 +18,14 @@
 static const char* element[]={"HEA", "Mo","Nb","Ta","W"};
 static const double mlp_intercept = -17409.5; //-17351.3;//-21834;//-23926.1; //mev
 static const double reglin_intercept = -1.2702430255548436; //Ry
-static const int  E_0 = 50;
+static const int E_0 = 100;
 static const int k_f = 1;
 static const int lngk_f = log(k_f);
 
-static const double Z_R = 10;
-GLOBAL int VAE_D, SHIFT; 
+static const double Z_R = 0.001;
+GLOBAL int VAE_D, SHIFT, PAD; 
+GLOBAL float* inputConfig;
+//GLOBAL float z[3];
 
 GLOBAL heaModel model;
 GLOBAL bool* cluster;

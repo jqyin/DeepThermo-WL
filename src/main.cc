@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 #endif
 
 #endif
-        vae_dir = "./models/vae/model";
+        vae_dir = "./models/vae/models";
 	LoadClientModel(vae_dir);	
 	//Error message if the number of arguments is incorrect
 	if (argc != 3 && myrank == 0) ErrorMsg(0, "");
@@ -87,13 +87,15 @@ int main(int argc, char *argv[])
 	if(ptEmax/N_3 > WLD1max)
 		WLD1max = ptEmax/N_3;
 	printf("ptEmin = %g  ptEmax = %g\n", ptEmin, ptEmax);
-
+	
         if(myrank == 0){
                 ofp_run=fopen("run.dat","a");
                 ofp_comm=fopen("comm.dat","w");
 		start = time(NULL);
                 fprintf(ofp_run,"#seeds: %d,%d,%d\n",314159265,362436069,atoi(argv[4]));
         }
+
+
 	//Initialize the Wang-Landau sampling parameters
 	initWL();
         numf=1;
@@ -107,14 +109,11 @@ int main(int argc, char *argv[])
 		tmp_flat=0.0;
 		MPI_Barrier(MPI_COMM_WORLD);
 #ifdef  GLOBAL_UPDATE
-		//if(myrank == 0)
-		global_update();
-		//MPI_Bcast(wlH, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-		//MPI_Bcast(wllng, D1BINS, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+		global_update(N_3, Flatness*lnwlf);
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
-			sweepWL(nsweeps, 1);
+			sweepWL(N_3, 1);
 			IterSweeps+=1;
 			TotalSweeps+=1; 
 			if( (TotalSweeps % 1) == 0)
@@ -128,6 +127,7 @@ int main(int argc, char *argv[])
 				MPI_Barrier(MPI_COMM_WORLD);
 #else
 				//MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+				//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 				MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
 				MPI_Barrier(MPI_COMM_WORLD);
 #endif
@@ -138,6 +138,7 @@ int main(int argc, char *argv[])
 					wllng[i] += wlHd[i]*lnwlf;    //wllngd[i];
 				}	
 				memset(wllngi, 0, D1BINS*sizeof(double));
+				//memset(wlHi, 0, D1BINS*sizeof(int));
 				memset(wlHi, 0, D1BINS*sizeof(unsigned short));
 				tmp_flat=flatWL();
 				if( (IterSweeps %100)==0 &&  myrank == 0)

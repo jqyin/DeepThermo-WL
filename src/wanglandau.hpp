@@ -9,7 +9,7 @@
 
 #define PERW 0.8
 #define LAMDA 1.0
-#define KAPA  100
+#define KAPA  1000
 
 GLOBAL double dWLD1;  //Bin Widths for Primary sampling direction
 GLOBAL double WLD1max,WLD1min;  //sampling boundaries for PRIMARY (Energy) direction
@@ -32,9 +32,10 @@ GLOBAL int D1BINS;  //Number of Bins in the DOS and Histogram
 GLOBAL double invdWLD1;  //Stores inverse bin widths
 
 //For 2D WL simulations
-GLOBAL int *wlH;  //the Wang-Landau accumulated histogram
+GLOBAL double *wlH;  //the Wang-Landau accumulated histogram
+//GLOBAL int *wlHd, *wlHi;  //the Wang-Landau accumulated histogram
 GLOBAL unsigned short *wlHd, *wlHi;  //the Wang-Landau accumulated histogram
-GLOBAL double *wllng, *wllngd, *wllngi;  //the Wang-Landau natural log of the density of states
+GLOBAL double *wllng, *wllng_prior, *wllngd, *wllngi;  //the Wang-Landau natural log of the density of states
 GLOBAL double lnwlf;  //natural log of the Wang-Landau update factor, f
 GLOBAL int *mask;
 GLOBAL int *acceptrot, *attemptrot;
@@ -61,9 +62,9 @@ void readmask(void);
 void writemask(void);
 void write_restart(void);
 void read_restart(void);
-void global_update();
+void global_update(int, double);
 //Wang-Landau routines
-int WangLandau(double Ei, double Ef);//, double Enbi, double Enbf);
+int WangLandau(double Ei, double Ef, int mode);//, double Enbi, double Enbf);
 
 #endif
 
