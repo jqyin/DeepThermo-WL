@@ -1,6 +1,6 @@
 CC = mpic++
 TF_DIR = /sw/summit/open-ce/anaconda-base/envs/open-ce-1.2.0-py38-0
-Flag = -O2 -g -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -isystem /gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++17
+Flag = -O2 -g -Wno-narrowing -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -isystem /gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++17
 LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so  -Wl,-rpath,/gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/lib -L/gpfs/alpine/scratch/junqi/stf218/mcml/SmartRedis/install/lib  -lsmartredis
 Model_Flag ?= 
 WL_Flag ?= -DGLOBAL_UPDATE

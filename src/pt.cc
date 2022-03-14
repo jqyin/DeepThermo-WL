@@ -193,12 +193,12 @@ int Metropolis(double Ei, double Ef)
     };
 }
 
-void mchybrid(int mode){
+void mchybrid(SamplingMode mode){
 
 	int cnt, i, j,k;
 	double eta1, eta2, etasq, rx, ry, rz;
 	for(cnt=0; cnt<N*N*N; cnt++){
-		Rot(mode);
+		BondSwap(mode);
 	}
 	//vae_update(mode);
 /*	for(i = 0; i < N; i++)
@@ -253,19 +253,18 @@ void correlation(double* avgScorr){
 	}
 }*/
 
-void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, int mode){
+void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, SamplingMode mode){
 	int mcs,i,j,k,n, t;
 	FILE *ofp, *ofp1, *ofp2, *ofp_time;
-	double M[NE+1]; // 0 - cr; 1-fe; 2-co; 3-ni; 4-total;
-	double avgE, avgE2, avgM[NE+1], avgM2[NE+1], avgM4[NE+1];
-	double c, x[NE+1], bc[NE+1], avgScorr[SH];
+	double avgE, avgE2, M, avgM, avgM2, avgM4;
+	double c, x, bc, avgScorr[SH];
 	double* Et = (double*)malloc(sizeof(double)*(SAMPS+DROPI));
 	double* Mt = (double*)malloc(sizeof(double)*(SAMPS+DROPI));
 	double* Ea = (double*)malloc(sizeof(double)*nT);
-	double* Ma = (double*)malloc(sizeof(double)*nT*(NE+1));
+	double* Ma = (double*)malloc(sizeof(double)*nT);
 	double* ca = (double*)malloc(sizeof(double)*nT);
-	double* xa = (double*)malloc(sizeof(double)*nT*(NE+1));
-	double* bca = (double*)malloc(sizeof(double)*nT*(NE+1));
+	double* xa = (double*)malloc(sizeof(double)*nT);
+	double* bca = (double*)malloc(sizeof(double)*nT);
 	double* Scorra = (double*)malloc(sizeof(double)*nT*SH);
 	int* attempts=(int*)malloc(sizeof(int)*nT);
 	int* accepts=(int*)malloc(sizeof(int)*nT);
@@ -276,9 +275,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 	std::chrono::high_resolution_clock::time_point t3,t4;
 	std::map<double, int> histE, histM, histM2, histM4;
 	avgE = avgE2 = 0.0;
-	for(i=0; i<(NE+1);i++){
-		avgM[i] = avgM2[i] = avgM4[i] =0.0;
-	}
+	avgM = avgM2 = avgM4 =0.0;
 	for(i=0; i<SH; i++)
 		avgScorr[i] = 0.0;
 	if(myrank ==0)
@@ -297,7 +294,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 		        }
 #ifdef Time_Series
 		        Et[mcs] = currEtot;
-	        	O(M); 
+	        	M = L1(); 
 		        Mt[mcs] = M[NE];
 #endif
 	        }
@@ -317,24 +314,24 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 		fread(&mcs, sizeof(int), 1, ofp1);
 		fread(&avgE, sizeof(double), 1, ofp1);
 		fread(&avgE2, sizeof(double), 1, ofp1);
-		fread(avgM, sizeof(double), (NE+1), ofp1);
-		fread(avgM2, sizeof(double), (NE+1), ofp1);
-		fread(avgM4, sizeof(double), (NE+1), ofp1);
+		fread(&avgM, sizeof(double), 1, ofp1);
+		fread(&avgM2, sizeof(double), 1, ofp1);
+		fread(&avgM4, sizeof(double), 1, ofp1);
 	        fclose(ofp1);
         }
 //#endif
 
 	while(mcs < SAMPS){
 		for(i=0;i<SEP;++i){
-			if(mcs == 1){
+			/*if(mcs == 1){
 				if(myrank == 0){
                 			ofp_time= fopen("infer.dat","w");
                 			//t3 = time(NULL);
 					t3 = std::chrono::high_resolution_clock::now();
         			}
-			}
+			}*/
 			mchybrid(mode);
-			if(mcs == 1){
+			/*if(mcs == 1){
 				if(myrank == 0){
 					//t4 = time(NULL);
 					t4 = std::chrono::high_resolution_clock::now();
@@ -343,7 +340,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 					fflush(ofp_time);
 				}
 
-			}
+			}*/
 			if( int(mcs*SEP+i)%2==0 ){	
 				swap(flag);
 				if(flag) 
@@ -355,12 +352,10 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 
 		avgE +=currEtot;
 		avgE2 +=currEtot*currEtot;
-		O(M);
-		for(i = 0; i<(NE+1); i++){
-			avgM[i] += M[i];
-			avgM2[i] += M[i]*M[i];
-			avgM4[i] += M[i]*M[i]*M[i]*M[i];
-		}
+		M = L1();
+		avgM += M;
+		avgM2 += M*M;
+		avgM4 += M*M;
 /////////////////////////////////////////////////////////
 		if(mcs % CHPT_STEPS == 0){ //checkpoint
 
@@ -380,9 +375,9 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 				fwrite(&mcs, sizeof(int), 1, ofp1);
 				fwrite(&avgE, sizeof(double), 1, ofp1);
 				fwrite(&avgE2, sizeof(double), 1, ofp1);
-				fwrite(avgM, sizeof(double), (NE+1), ofp1);
-				fwrite(avgM2, sizeof(double), (NE+1), ofp1);
-				fwrite(avgM4, sizeof(double), (NE+1), ofp1);
+				fwrite(&avgM, sizeof(double), 1, ofp1);
+				fwrite(&avgM2, sizeof(double),1, ofp1);
+				fwrite(&avgM4, sizeof(double),1, ofp1);
 				fclose(ofp1);
 				printf("avgE2-avgE*avgE %g\n",avgE2/mcs-avgE*avgE/mcs/mcs);
 				MPI_Finalize();
@@ -408,22 +403,14 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 	//write_xyz(SAMPS);
 	avgE/=1.0*SAMPS;
         avgE2/=1.0*SAMPS;
-	for(i=0; i<(NE+1);i++){
-		avgM[i]/=1.0*SAMPS;
-		avgM2[i]/=1.0*SAMPS;
-		avgM4[i]/=1.0*SAMPS;
-	}
+	avgM/=1.0*SAMPS;
+        avgM2/=1.0*SAMPS;
+        avgM4/=1.0*SAMPS;
 	c = (avgE2 - avgE*avgE)*E_scale*E_scale/(T_scale*T_scale*pT*pT) ;
 	//for(i=0;i<SH;i++)
 	//  	avgScorr[i]/=1.0*SAMPS;
-	for(i=0;i<(NE+1);i++){
-		if(i < NE)
-			 x[i] = (avgM2[i] - avgM[i]*avgM[i])*NT[i]/pT/T_scale;
-		else
-			 x[i] = (avgM2[i] - avgM[i]*avgM[i])*N*N*N/pT/T_scale;
-
-		bc[i] = 1 - avgM4[i] / (avgM2[i]*avgM2[i]) / 3.0;	 
-	}
+	x = (avgM2 - avgM*avgM)*N_3/pT/T_scale;
+        bc = 1 - avgM4/avgM2/avgM2/3;
 
 #ifdef Time_Series
 	if(myrank < nprocs){
@@ -454,11 +441,11 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 #endif
 
 	MPI_Gather(&avgE, 1, MPI_DOUBLE, Ea, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-	MPI_Gather(avgM, (NE+1), MPI_DOUBLE, Ma, (NE+1), MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+	MPI_Gather(&avgM, 1, MPI_DOUBLE, Ma, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&c, 1, MPI_DOUBLE, ca, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	//MPI_Gather(avgScorr, SH, MPI_DOUBLE, Scorra, SH, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-	MPI_Gather(x, (NE+1), MPI_DOUBLE, xa, (NE+1), MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-	MPI_Gather(bc, (NE+1), MPI_DOUBLE, bca, (NE+1), MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+	MPI_Gather(&x, 1, MPI_DOUBLE, xa, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
+	MPI_Gather(&bc, 1, MPI_DOUBLE, bca, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&att, 1, MPI_INT, attempts, 1, MPI_INT, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&acc, 1, MPI_INT, accepts, 1, MPI_INT, 0 , MPI_COMM_WORLD);
 
@@ -469,8 +456,7 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 		  fprintf(ofp,"%g\t%g\t%g\t",
 			  T[n],Ea[n]*invN,ca[n]*invN
 			 /* Ma[n*5+3], xa[n*5+3], bca[n*5+3]*/);
-		  for(i=0;i<(NE+1);i++)
-			fprintf(ofp, "%g\t%g\t%g\t",Ma[n*(NE+1)+i],xa[n*(NE+1)+i],bca[n*(NE+1)+i]);
+		  fprintf(ofp, "%g\t%g\t%g\t",Ma[n+i],xa[n*+i],bca[n+i]);
 		  fprintf(ofp,"\n");
 		}	
 		fclose(ofp);

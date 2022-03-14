@@ -7,6 +7,7 @@
 #define GLOBAL extern
 #endif 
 #include "model.hpp"
+#include "main.hpp"
 #define NE 4
 #define SH 6   // number of shells
 #define O_SH 1   // number of shells
@@ -22,14 +23,14 @@ static const int E_0 = 100;
 static const int k_f = 1;
 static const int lngk_f = log(k_f);
 
-static const double Z_R = 0.001;
+static const double Z_R = 0.01;
 GLOBAL int VAE_D, SHIFT, PAD; 
 GLOBAL float* inputConfig;
 //GLOBAL float z[3];
 
 GLOBAL heaModel model;
 GLOBAL bool* cluster;
-GLOBAL double* Mavg;
+GLOBAL double* op, *op2;
 
 GLOBAL int N, N_2, N_3; //linear dimenstion;
 GLOBAL double invN;
@@ -72,14 +73,15 @@ inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, i
 double Esite(int i, int j, int k);
 
 void wolff(int i, int j, int k, double rx, double ry, double rz);
-void Rot(int);
-void vae_update(int);
+void BondSwap(SamplingMode);
+void vae_update(SamplingMode);
 void Vol();
-void O(double* op);
+double L1();
 void write_pos();
 void write_xyz(int frame);
 void thermoqs();
 void ini_W();
+void OrderParameter(int idx);
 
 // p. b. c.
 //#define BC(I) ( (I>=N)?(I-N):( (I<0)?(I+N):I ) )  

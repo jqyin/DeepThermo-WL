@@ -3,6 +3,7 @@
 #include <math.h>
 #include<memory.h>
 #include<assert.h>
+#include <chrono>
 #include "mpi.h"
 
 #include "rand.hpp"
@@ -203,6 +204,10 @@ void initWL(void)
 	wllngi = (double*)malloc( D1BINS * sizeof(double ) );
 	mask = (int*)malloc( D1BINS * sizeof(int ) );
 
+	op = (double*)malloc( D1BINS * sizeof(double ) );
+	op2 = (double*)malloc( D1BINS * sizeof(double ) );
+
+
 	attemptrot = (int *)malloc(D1BINS*sizeof(int));
 	acceptrot = (int *)malloc(D1BINS*sizeof(int));
 
@@ -227,6 +232,7 @@ void initWL(void)
 		mask[i]=1;
 		attemptrot[i]=0;
 		acceptrot[i]=0;
+		op[i] = op2[i]= 0;
 
 	};
 	for(i = 0 ; i<1000;i++)
@@ -236,7 +242,7 @@ void initWL(void)
 	pT=100;
 	while( (currEtot*invN> WLD1max)  )   // || (currEtot*invN<WLD1min) )
     	{
-		mchybrid(1);
+		mchybrid(metropolis);
 		fprintf(stderr,"rank%d Relaxing:  %g of %g \n", myrank, currEtot*invN,WLD1max);
     	};
 
@@ -264,30 +270,45 @@ void freeWL(){
 
 }
 //attempts to run one WL hybrid move per bin
-void sweepWL(int nsweeps, int mode)
+void sweepWL(int nsweeps, SamplingMode mode)
 {
 	for(int i=0;i<nsweeps;++i)
    	{
-		Rot(mode);
+		BondSwap(mode);
 		
 	}
 }
 
 
 void global_update(int nsweeps, double Flat){
-	int i;
+	int i, cnt=0;
+	double duration = 0.0;
 	double tmp_flat = 0.0;
 	double maxg=-1.0e300;
 	double ming=1.0e300;
-	FILE * fp;
+	FILE * fp, *fp_time;
+	std::chrono::high_resolution_clock::time_point start,end;
+ 	if(numf == 5 && myrank == 0){
+		fp_time = fopen("infer.dat", "w");	
+	}
 	while(tmp_flat <= Flat)
 	{		
-		sweepWL(nsweeps, 2);
-		vae_update(2);
+		sweepWL(nsweeps, WLprior);
+		if(numf == 5)
+			start = std::chrono::high_resolution_clock::now();
+		vae_update(WLprior);
+		if(numf == 5){
+			end = std::chrono::high_resolution_clock::now();	
+			std::chrono::duration<double, std::milli> ms_double = end - start;
+			duration += ms_double.count(); 
+			cnt++;
+		}
+		
 		IterSweeps+=1;
 		TotalSweeps+=1; 
 		if( (TotalSweeps % 1) == 0)
 		{
+			//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 			MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
 			for(i=0;i<D1BINS;i++){
 				wlH[i] += wlHd[i];
@@ -300,6 +321,10 @@ void global_update(int nsweeps, double Flat){
 			if( (IterSweeps %100)==0 &&  myrank == 0)
 				write_DOS_H();
 		}
+	}
+ 	if(numf == 5 && myrank == 0){
+		fprintf(fp_time, "infers/ms: %f\n", 2.0*cnt/duration);
+		fflush(fp_time);	
 	}
 
 	for(i=0;i<D1BINS;++i)
@@ -355,7 +380,7 @@ void global_update(int nsweeps, double Flat){
 
 
 //routine to encapsulate the WangLandau algorithm, returns 1 if accepted and 0 if rejected
-int WangLandau(double Ei, double Ef, int mode) //, double Enbi, double Enbf)
+int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double Enbf)
 {
 	int iti;//indices of initial config
 	int fti;//indices of final config
@@ -397,11 +422,11 @@ int WangLandau(double Ei, double Ef, int mode) //, double Enbi, double Enbf)
 	else
     	{
 		//inside of bounds
-		if(mode == 1){
+		if(mode == WLdos || mode == WLproduction){
 			lngi=wllngi[iti] + wllng[iti];
 			lngf=wllngi[fti] + wllng[fti];
 		}
-		else{//prior
+		else if(mode == WLprior){//prior
 			lngi=wllngi[iti] + wllng[iti] + wllng_prior[iti];
 			lngf=wllngi[fti] + wllng[fti] + wllng_prior[fti];
 		}
@@ -409,20 +434,32 @@ int WangLandau(double Ei, double Ef, int mode) //, double Enbi, double Enbf)
 		if(randd1()<R)
 		{
 			//accept
-			acceptrot[iti] += 1;
-	    		wlHi[fti]+=1;
-			//wllngi[fti]+=lnwlf;		
-			//wlHi[fti]+= (fti > E_0)? 1.0/(1.0+k_f): 1.0;
-			wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;	
+			if(mode == WLdos || mode == WLprior){
+				acceptrot[iti] += 1;
+	    			wlHi[fti]+=1;
+				//wllngi[fti]+=lnwlf;		
+				//wlHi[fti]+= (fti > E_0)? 1.0/(1.0+k_f): 1.0;
+				wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;
+			}else if(mode == WLproduction){
+				OrderParameter(fti);
+	    			wlHi[fti]+=1;
+				wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;
+			}	
 			return 1;
 		}
 		else
 		{
 			//reject
-			wlHi[iti]+=1;
-			//wllngi[iti]+=lnwlf;	
-			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
-			wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+			if(mode == WLdos || mode == WLprior){
+				wlHi[iti]+=1;
+				//wllngi[iti]+=lnwlf;	
+				//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
+				wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+			}else if(mode == WLproduction){
+				OrderParameter(iti);
+				wlHi[iti]+=1;
+				wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+			}	
 			return 0;
 		};
     	};

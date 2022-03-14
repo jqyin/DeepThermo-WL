@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
 	printf("Etot = %g\n", currEtot);
 
 	//warm up with parallel tempering 
-	parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,0);
+	parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,metropolis);
 	MPI_Allreduce(&currEtot, &ptEmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 	MPI_Allreduce(&currEtot, &ptEmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 	if(ptEmin/N_3 < WLD1min)
@@ -113,7 +113,10 @@ int main(int argc, char *argv[])
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
-			sweepWL(N_3, 1);
+			if(TotalSweeps%int(pow(10, numf))==0)
+                                vae_update(WLdos);
+
+			sweepWL(N_3, WLdos);
 			IterSweeps+=1;
 			TotalSweeps+=1; 
 			if( (TotalSweeps % 1) == 0)
@@ -163,30 +166,34 @@ int main(int argc, char *argv[])
 		fclose(ofp_run);
 	}
 
-        /*resetWL();              
+	// production runs
+        resetWL();              
         int count=0;
 	MPI_Barrier(MPI_COMM_WORLD);
-
         while(count < ProductionBinSamps){ // (lnwlf > 1e-6){
-		sweepWL( N*N*N/nprocs, 1);
-		std::cout << "myrank: " << myrank << " E: " << currEtot << std::endl;
+		sweepWL(N_3, WLproduction);
+		//std::cout << "myrank: " << myrank << " E: " << currEtot << std::endl;
 		if( (IterSweeps % 1 ) == 0)
 		{
-                	MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-                        MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+                        MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
+			//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
                         for(i=0;i<D1BINS;i++){
                         	wlH[i] += wlHd[i];
-                                wllng[i] += wllngd[i];
+                                wllng[i] += wlHd[i]*lnwlf; 
                         }
-                        memset(wllngi, 0, D1BINS*sizeof(double));
-                        memset(wlHi, 0, D1BINS*sizeof(double));
+			//memset(wlHi, 0, D1BINS*sizeof(int));
+			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
                 }
 		count++;
                 IterSweeps+=1;
                 TotalSweeps+=1;
 
                 lnwlf = 1.0/TotalSweeps;
-        }*/
+        }
+	memset(wllngi, 0, D1BINS*sizeof(double));
+	memset(wllngd, 0, D1BINS*sizeof(double));
+	MPI_Reduce(op, wllngi, D1BINS, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+	MPI_Reduce(op2, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         if(myrank == 0){
                 write_DOS_H();
                 thermoqs();

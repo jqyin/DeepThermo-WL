@@ -1,7 +1,6 @@
-
 #ifndef PT_H
 #define PT_H
-
+#include "main.hpp"
 #ifdef DEFINE_GLOBALS
 #define GLOBAL
 #else
@@ -30,12 +29,12 @@ GLOBAL int acc;
 
 void ini_T(double Ti, double Tf, int nT);
 void ini_sys();
-void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int i, int m);
+void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int i, SamplingMode m);
 void swap(bool);
 void freePT();
 int Metropolis(double Ei, double Ef);
 void read_state();
 void write_state();
-void mchybrid(int);
+void mchybrid(SamplingMode);
 
 #endif

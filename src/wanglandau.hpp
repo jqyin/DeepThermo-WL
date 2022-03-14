@@ -1,6 +1,7 @@
 #ifndef WANGLANDAU_H
 #define WANGLANDAU_H
 
+#include "main.hpp"
 #ifdef DEFINE_GLOBALS
 #define GLOBAL
 #else
@@ -10,6 +11,7 @@
 #define PERW 0.8
 #define LAMDA 1.0
 #define KAPA  1000
+
 
 GLOBAL double dWLD1;  //Bin Widths for Primary sampling direction
 GLOBAL double WLD1max,WLD1min;  //sampling boundaries for PRIMARY (Energy) direction
@@ -50,7 +52,7 @@ GLOBAL bool list[1000];
 
 void initWL(void); //initializes for WL
 void freeWL();
-void sweepWL(int sweeeps, int mode);//runs sweeps WL attempts
+void sweepWL(int sweeeps, SamplingMode mode);//runs sweeps WL attempts
 void wlhybrid();
 void resetWL(void);//resets H histogram array
 double flatWL(void); //returns H_min/H_avg
@@ -64,7 +66,7 @@ void write_restart(void);
 void read_restart(void);
 void global_update(int, double);
 //Wang-Landau routines
-int WangLandau(double Ei, double Ef, int mode);//, double Enbi, double Enbf);
+int WangLandau(double Ei, double Ef, SamplingMode mode);//, double Enbi, double Enbf);
 
 #endif
 

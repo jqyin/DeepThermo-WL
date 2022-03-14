@@ -455,7 +455,7 @@ void wolff(int i, int j, int k, double rx, double ry, double rz){
 		}
 }
 */
-void Rot(int mode){
+void BondSwap(SamplingMode mode){
 	int i, j, k, x, y, z, ii, jj, kk, n, it, shell;
 	int ai, aj, cnt, cntE; 
 	int Wo[NE][NE][SH];
@@ -477,7 +477,7 @@ void Rot(int mode){
 
         	deltaE = E2 - E1;
         	//attd++;
-		if(mode == 0){//metropolis
+		if(mode == metropolis){//metropolis
         		if(Metropolis(currEtot, currEtot+deltaE) == 1){// accept
         			currEtot += deltaE; //accd++;
         		}else{//reject
@@ -607,7 +607,7 @@ void decode(float* z){
 	 
 }
 
-void vae_update(int mode){
+void vae_update(SamplingMode mode){
 	float z[3] = {0};
 	double E1, E2, deltaE;
 	int Wo[NE][NE][SH];
@@ -615,10 +615,10 @@ void vae_update(int mode){
         memcpy(Wo, W, sizeof(int)*NE*NE*SH);
 	// encode the current config to latent space;
 	encode(z);
-        /*if(myrank == 0 && TotalSweeps%100 == 0){
+        if(myrank == 0 && TotalSweeps%100 == 0){
 		printf("step %d before: z=(%f,%f,%f), E=%f\n", TotalSweeps, z[0], z[1], z[2], currEtot);
 		//write_xyz(TotalSweeps);
-	}*/
+	}
 	// random walk in latent space; 
 	walk(z);
 	// decode the data point to real space; 
@@ -626,10 +626,10 @@ void vae_update(int mode){
 	// measure the energy of new configuration;
 	E1 = currEtot;
 	E2 = Etot(); 
-        /*if(myrank == 0 && TotalSweeps%100==0){
+        if(myrank == 0 && TotalSweeps%100==0){
 		printf("step %d after: z=(%f,%f,%f), E=%f\n", TotalSweeps, z[0], z[1], z[2], E2);
 		//write_xyz(TotalSweeps+1);
-	}*/
+	}
 	// update according to WL 	
 	deltaE = E2 - E1;
         attd++;
@@ -696,7 +696,7 @@ void write_xyz(int frame)
 void thermoqs()
 {
         int i;
-        double T,U,Z,C,F,S;
+        double T,U,Z,C,F,S,M,M2,X;
         double centerE,lambda,Bw,Nfree;
 
         FILE *therm_op;
@@ -724,6 +724,7 @@ void thermoqs()
                 F = 0.0;        // Initialize the free energy
                 S = 0.0;        // Initialize the entropy
                 Bw = 0.0;       //Boltzmann weight
+		M = M2 = X = 0.0; // order parameter
                 lambda = -1.0e300;      //Normalization shift (max value of DOS considering T)
                 centerE = 0.0;  // Taking the center of the energy bin
                //Finds the max and min of exp( wllng[][] )*exp(Etot*N/T)
@@ -752,7 +753,12 @@ void thermoqs()
                         U = U + (centerE)*Bw;
 
                         //Average Energy Squared <E^2>
-                        C = C + (centerE)*(centerE)*Bw;                                                        
+                        C = C + (centerE)*(centerE)*Bw;  
+
+			if(wlH[i] > 0){
+				M += wllngi[i]/wlH[i]*Bw;
+				M2 += wllngd[i]/wlH[i]*Bw;
+			}                                                      
                 };
 
                 //Internal Energy
@@ -769,61 +775,33 @@ void thermoqs()
                 //Entropy
                 S = (U - F)*E_scale/(T*T_scale);
 
-                fprintf(therm_op,"%g\t%g\t%g\t%g\t%g\n",T,U*invN,C*invN,F*invN,S*invN);
+		//VAE order parameter
+		M /= Z; M2 /= Z;
+		X = (M2 - M*M)*N_3/T/T_scale; 
+
+                fprintf(therm_op,"%g\t%g\t%g\t%g\t%g\t%g\t%g\n",T,U*invN,C*invN,F*invN,S*invN,M,X);
         };
 
         fclose(therm_op);
 }
 
+double L1(){
+	float z[3];
+	encode(z);
+	double M = 0.0;
+	for(int i=0;i<3;i++)
+		M += fabs(z[i]);
 
-// HEA order parameter 
-void O(double* M){
-	int i, j, k, x, y, z, cnt, shell, t, it, ai, aj, neighbors;
-        int nn[MAX_NEIGHBORS*3];
-	double Occ[NE], op[NE][NE];
+	return M;
+}
 
-	for(t = 0; t < NE; t++){
-		Occ[t] = 1.0*NT[t]/N_3;
-		for(it = 0; it < NE; it++)
-			op[t][it] = 0.0;
-	}
-	neighbors = 0;
-	for(shell =0; shell < O_SH; shell++)
-		neighbors += NS[shell];
-		
-	for(i=0; i<N; i++)
-		for(j=0; j<N; j++)
-			for(k=0; k<N; k++){
-				neighbor(i,j,k,nn);
-				cnt = 0; ai = Atom[i*N_2+j*N+k];
-				for(shell =0; shell < O_SH; shell++)for(it=0;it<NS[shell];it++){
-					x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-					aj = Atom[x*N_2+y*N+z];
-					op[ai][aj] += 1.0/neighbors; 
-				}
-				//op[ai] += fabs( 1.0*M/((cnt+1)/3) - Occ[ai]);
-	}
-	//op[NE] = 0.0;
-	for(t = 0; t < NE; t++){
-		for(it = 0; it < NE; it++){
-			op[t][it] /= N_3; //NT[t];
-			op[t][it] = 1 - op[t][it]/(Occ[t]*Occ[it]);
-		}
-		//op[t] /= (NT[t]*2*Occ[t]*(1-Occ[t]));
-		//op[NE] += op[t];
-	}
-	M[0] = op[0][2]; //Mo-Ta
-	M[1] = op[1][2]; //Nb-Ta
-	M[2] = op[1][3]; //Nb-W
-	M[3] = op[2][3]; //Ta-W
-	M[NE] = 0.0;
-	for(t = 0; t < NE; t++){
-		//M[t] = op[0][t];  
-		M[NE] += fabs(M[t]);
-	}	
-	M[NE] /= NE; 	
-	//op[NE] /= NE;			
-	
+// VAE order parameter 
+void OrderParameter(int idx){
+	double M;  
+	M = L1();
+	assert(idx >=0 && idx < D1BINS);
+        op[idx] += M;
+        op2[idx] += M*M;
 }
 
 
