@@ -1,0 +1,43 @@
+CC = CC
+TF_DIR = /ccs/proj/stf016/junqi/frontier/miniconda/tf_env
+Flag = -O2 -g -Wno-narrowing -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=gnu++11
+LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so
+
+Machine_Flag ?= -DCRUSHER
+WL_Flag ?= -DGLOBAL_UPDATE
+Backend_Flag ?= -DTF_BACKEND
+
+relax_dir = relax
+hist_dir = hist
+objs = \
+	rand.o parameter.o allreduce.o\
+	alloy.o wanglandau.o pt.o \
+	main.o 
+
+relax_objs = $(addprefix $(relax_dir)/, $(objs))
+hist_objs = $(addprefix $(hist_dir)/, $(objs))
+
+Exe = hea-wl
+Objects = $(objs) $(relax_objs) $(hist_objs)
+tmpdir = $(relax_dir) $(hist_dir)
+all: $(Exe)
+$(relax_dir):
+	mkdir -p $(relax_dir)
+$(hist_dir):
+	mkdir -p $(hist_dir)
+hea-wl: $(objs) 
+	$(CC) $(objs) $(LDFlag) -o $@
+hea-wl-relax: $(relax_objs)
+	$(CC) $(relax_objs) $(LDFlag) -o $@
+hea-wl-hist: $(hist_objs)
+	$(CC) $(hist_objs) $(LDFlag) -o $@
+$(relax_objs): Flag+=-DTime_Series 
+$(hist_objs): Flag+=-DHIST
+%.o: %.cc
+	$(CC) -c $(Flag) $(Backend_Flag) ${WL_Flag} ${Machine_Flag} $< -o $@
+$(relax_dir)/%.o: %.cc
+	$(CC) -c $(Flag) $(Backend_Flag) ${WL_Flag} ${Machine_Flag} $< -o $@
+$(hist_dir)/%.o: %.cc
+	$(CC) -c $(Flag) $(Backend_Flag) ${WL_Flag} ${Machine_Flag} $< -o $@
+clean:
+	rm -rf $(Exe) $(Objects) $(tmpdir)

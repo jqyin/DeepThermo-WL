@@ -13,7 +13,11 @@
 #include "pt.hpp"
 #include "wanglandau.hpp"
 #include "allreduce.h"
+
+#ifndef TF_BACKEND
 #include "client.hpp"
+#endif
+
 
 int nprocs;
 int myrank;
@@ -39,28 +43,18 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[4])*myrank);
 	shelltimeseed(rand()+19*myrank+19273);
 
-        std::string model_dir, vae_dir;
-        //model_dir = "./models/exported/mixed-opt/dense/MoNbTaW";
-        model_dir = "./models/exported/mixed-opt/conv/MoNbTaW";
-        //model_dir = "./models/exported/fp32-opt/small/MoNbTaW";
-        //model_dir = "./models/exported/fp32-opt/large/MoNbTaW/model_MoNbTaW";
-        //model_dir = "./models/exported/fp16-opt/large/MoNbTaW/model_MoNbTaW";
+        std::string model_dir;
+        model_dir = "./models/vae/models";
 
-#ifdef DL_MODEL
-
-#ifdef BACKEND_TF
+#ifdef TF_BACKEND
         //start tensorflow session;
         SessionOptions options;
         options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(myrank%GPUperNode));
-        model.LoadModel(model_dir, options);
+        model[0].LoadModel(model_dir+"/encoder", options);
+        model[1].LoadModel(model_dir+"/decoder", options);
 #else
 	LoadClientModel(model_dir);	
-
 #endif
-
-#endif
-        vae_dir = "./models/vae/models";
-	LoadClientModel(vae_dir);	
 	//Error message if the number of arguments is incorrect
 	if (argc != 3 && myrank == 0) ErrorMsg(0, "");
 

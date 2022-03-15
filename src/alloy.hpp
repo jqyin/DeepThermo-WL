@@ -28,7 +28,7 @@ GLOBAL int VAE_D, SHIFT, PAD;
 GLOBAL float* inputConfig;
 //GLOBAL float z[3];
 
-GLOBAL heaModel model;
+GLOBAL heaModel model[2];
 GLOBAL bool* cluster;
 GLOBAL double* op, *op2;
 

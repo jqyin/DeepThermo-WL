@@ -9,8 +9,11 @@
 #include "alloy.hpp"
 #include "rand.hpp"
 #include "pt.hpp"
-#include "client.hpp"
 #include "wanglandau.hpp"
+
+#ifndef TF_BACKEND
+#include "client.hpp"
+#endif
 
 extern std::string encoder_name, decoder_name;
 extern int myrank, nprocs;
@@ -299,76 +302,6 @@ double Etot(){
 	double E;
 	E = 0.0;
 
-#ifdef DL_MODEL
-
-#ifdef Backend_TF
-	tensorflow::TensorShape data_shape({1, 1, SH*NE*(NE-1)/2});
-        tensorflow::Tensor data(tensorflow::DT_HALF, data_shape);
-        auto data_ = data.flat<Eigen::half>().data();
-        //tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-        //auto data_ = data.flat<float>().data();
-        int cnt=0;
-       	for(int shell = 0; shell < SH; shell++){
-                for(int i =0; i < NE-1; i++){
-                        for(int j =i+1; j < NE; j++){
-				//data_[cnt++] = (invN*W[i][j][shell]/NS[shell]);
-				data_[cnt++] = (Eigen::half)(invN*W[i][j][shell]/NS[shell]);
-			}
-		}
-	}
-
-	std::vector<tensorflow::Tensor> outputs;
-        model.Predict(data, outputs);
-	E = outputs[0].flat<float>().data()[0] + mlp_intercept;
-        E = E/E_scale; 
-#else
-        float data[SH*NE*(NE-1)/2];
-	std::string data_key, eng_key;
-	std::string rankID = std::to_string(myrank);
-        int cnt=0;
-       	for(int shell = 0; shell < SH; shell++){
-                for(int i =0; i < NE-1; i++){
-                        for(int j =i+1; j < NE; j++){
-				data[cnt++] = (invN*W[i][j][shell]/NS[shell]);
-			}
-		}
-	}
-
-						
-	data_key = "data_"+rankID;
-	eng_key = "eng_"+rankID;
-
-	//if (MC == 5&& myrank ==0)
-	//	t1 = std::chrono::high_resolution_clock::now();
-	(*SRclient).put_tensor(data_key, data, {1,1,SH*NE*(NE-1)/2}, SmartRedis::TensorType::flt,
-				SmartRedis::MemoryLayout::contiguous);
-	//if (MC == 5&& myrank ==0)
-	//	t2 = std::chrono::high_resolution_clock::now();
-        //std::cout << model_name << std::endl;
-	(*SRclient).run_model(model_name+rankID, {data_key}, {eng_key});
-	//if (MC == 5 && myrank ==0)
-	//	t3 = std::chrono::high_resolution_clock::now();
-	//std::vector<float> eng;
-        float eng;
-	(*SRclient).unpack_tensor(eng_key, &eng, {1}, SmartRedis::TensorType::flt,
-                                SmartRedis::MemoryLayout::contiguous);
-	//if (MC == 5 && myrank ==0)
-		//t4 = std::chrono::high_resolution_clock::now();
-	E = eng + mlp_intercept;
-        E = E/E_scale;
-
-	/*if (MC == 5 && myrank == 0){
-		std::chrono::duration<double, std::milli> ms_double = t2 - t1;
-		std::cout << "put_tensor: " << ms_double.count() << std::endl;
-		ms_double = t3-t2; 
-		std::cout << "run_model: " << ms_double.count() << std::endl;
-		ms_double = t4-t3; 
-		std::cout << "unpack_tensor: " << ms_double.count() << std::endl;
-	}*/
-#endif
-
-
-#else // regression model 
        	for(int shell = 0; shell < SH; shell++){
                 for(int i =0; i < NE-1; i++){
                         for(int j =i+1; j < NE; j++){
@@ -377,7 +310,6 @@ double Etot(){
 		}
 	}
 	E += reglin_intercept;
-#endif
 	return E*N_3; 
 
 }
@@ -503,6 +435,25 @@ void BondSwap(SamplingMode mode){
 
 void encode(float* z){
 	int i,j,k,t; 
+#ifdef TF_BACKEND
+	tensorflow::TensorShape data_shape({1, VAE_D, VAE_D, VAE_D, NE});
+        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+        auto data_ = data.flat<float>().data();
+  	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++){
+		int idx = (j-i+k+SHIFT+PAD)*VAE_D*VAE_D*NE + (k-j+i+SHIFT+PAD)*VAE_D*NE + (j+i-k+SHIFT+PAD)*NE;
+		for(t =0; t <NE; t++)
+			if(Atom[i*N_2+j*N+k]==t){
+				data_[idx+t] = 1;
+				break;
+			}else{
+				data_[idx+t] = 0;
+			}
+	}
+	std::vector<tensorflow::Tensor> outputs;
+        model[0].Predict(data, outputs, PredictMode::encoder);
+	for(i=0;i<3;i++)
+		z[i] = outputs[0].flat<float>().data()[i];
+#else
 	std::string z_key, config_key;
 	std::string rankID = std::to_string(myrank);
 	memset(inputConfig,0,sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
@@ -520,6 +471,7 @@ void encode(float* z){
                                 SmartRedis::MemoryLayout::contiguous);
 	(*SRclient).run_model(encoder_name+rankID, {config_key}, {z_key});
 	(*SRclient).unpack_tensor(z_key, z, {3}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+#endif
 }
 
 void walk(float* npos){
@@ -562,6 +514,17 @@ void decode(float* z){
 	int sumo[NE] = {0};
 	float output[VAE_D*VAE_D*VAE_D*NE] = {0};
 	std::vector<float> vec(NE); 	
+#ifdef TF_BACKEND
+
+	tensorflow::TensorShape data_shape({1, 3});
+        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+        auto data_ = data.flat<float>().data();
+	for(i=0;i<3;i++)
+		data_[i] = z[i];
+	std::vector<tensorflow::Tensor> outputs;
+        model[1].Predict(data, outputs, PredictMode::decoder);
+	memcpy(output, outputs[0].flat<float>().data(), sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
+#else
 	std::string z_key, config_key;
 	std::string rankID = std::to_string(myrank);
 	
@@ -571,7 +534,7 @@ void decode(float* z){
                                 SmartRedis::MemoryLayout::contiguous);
 	(*SRclient).run_model(decoder_name+rankID, {z_key}, {config_key});
 	(*SRclient).unpack_tensor(config_key, &output, {VAE_D*VAE_D*VAE_D*NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
-
+#endif
 	for(t=0;t<NE;t++)
 		memset(elist[t],-1,sizeof(int)*N_3);
   	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++){

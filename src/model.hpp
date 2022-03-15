@@ -17,6 +17,8 @@ using tensorflow::SavedModelBundle;
 using tensorflow::SessionOptions;
 using tensorflow::RunOptions;
 
+enum PredictMode {encoder, decoder}; 
+
 class heaModel{
 	private:
 		SavedModelBundle bundle;
@@ -24,7 +26,7 @@ class heaModel{
 		RunOptions runOpt;
 	public:
 		void LoadModel(string, SessionOptions);
-		void Predict(Tensor input, vector<Tensor>&);
+		void Predict(Tensor input, vector<Tensor>&, PredictMode);
 };
 
 
@@ -34,19 +36,22 @@ void heaModel::LoadModel(string model_path, SessionOptions options){
 	sessOpt.config.mutable_gpu_options()->set_allow_growth(true);
 	auto status = tensorflow::LoadSavedModel(sessOpt, runOpt, model_path, {"serve"}, &bundle);
 	if (!status.ok()){
-		cout << "Error in LoadModel" << endl;
+		cout << "Error in loading model" << endl;
 	}
 }
 
-void heaModel::Predict(Tensor input, vector<Tensor> &pred){
-	const string input_node = "input_1:0";
-	string output_node = "Identity:0";
-//	const string input_node = "serving_default_input_1:0";
-//	string output_node = "StatefulPartitionedCall:0";
+void heaModel::Predict(Tensor input, vector<Tensor> &pred, PredictMode mode){
+        string input_node, output_node; 
+        if (mode == encoder){ 	
+		input_node = "input_1";
+	}else if (mode == decoder){
+		input_node = "input_2";
+	}
+	output_node = "Identity";
 	vector<std::pair<string, Tensor>> data = {{input_node, input}};
 	auto status = this->bundle.GetSession()->Run(data, {output_node}, {}, &pred);
 	if (!status.ok()){
-		cout << "Error in Predict" << endl;
+		cout << "Error in predict" << endl;
 		cout << status.error_message();
 	}
 

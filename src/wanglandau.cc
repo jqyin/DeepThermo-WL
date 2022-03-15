@@ -288,16 +288,16 @@ void global_update(int nsweeps, double Flat){
 	double ming=1.0e300;
 	FILE * fp, *fp_time;
 	std::chrono::high_resolution_clock::time_point start,end;
- 	if(numf == 5 && myrank == 0){
+ 	if(numf == 2 && myrank == 0){
 		fp_time = fopen("infer.dat", "w");	
 	}
 	while(tmp_flat <= Flat)
 	{		
 		sweepWL(nsweeps, WLprior);
-		if(numf == 5)
+		if(numf == 2)
 			start = std::chrono::high_resolution_clock::now();
 		vae_update(WLprior);
-		if(numf == 5){
+		if(numf == 2){
 			end = std::chrono::high_resolution_clock::now();	
 			std::chrono::duration<double, std::milli> ms_double = end - start;
 			duration += ms_double.count(); 
@@ -322,7 +322,7 @@ void global_update(int nsweeps, double Flat){
 				write_DOS_H();
 		}
 	}
- 	if(numf == 5 && myrank == 0){
+ 	if(numf == 2 && myrank == 0){
 		fprintf(fp_time, "infers/ms: %f\n", 2.0*cnt/duration);
 		fflush(fp_time);	
 	}

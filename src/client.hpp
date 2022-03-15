@@ -5,7 +5,6 @@
 #include <string>
 #include "client.h"
 
-#define GPUperNode 6
 
 std::string encoder_name, decoder_name;
 SmartRedis::Client* SRclient;
