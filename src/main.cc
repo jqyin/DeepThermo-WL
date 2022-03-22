@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
 	shelltimeseed(rand()+19*myrank+19273);
 
         std::string model_dir;
-        model_dir = "./models/vae/models";
+        model_dir = "./models/";
 
 #ifdef TF_BACKEND
         //start tensorflow session;
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 	printf("Etot = %g\n", currEtot);
 
 	//warm up with parallel tempering 
-	parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,metropolis);
+	/*parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,metropolis);
 	MPI_Allreduce(&currEtot, &ptEmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 	MPI_Allreduce(&currEtot, &ptEmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 	if(ptEmin/N_3 < WLD1min)
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	if(ptEmax/N_3 > WLD1max)
 		WLD1max = ptEmax/N_3;
 	printf("ptEmin = %g  ptEmax = %g\n", ptEmin, ptEmax);
-	
+	*/
         if(myrank == 0){
                 ofp_run=fopen("run.dat","a");
                 ofp_comm=fopen("comm.dat","w");
@@ -91,23 +91,26 @@ int main(int argc, char *argv[])
 
 
 	//Initialize the Wang-Landau sampling parameters
-	initWL();
         numf=1;
+	k_f = int(nprocs/10) > 0 ? int(nprocs/10) : 1; 
 	STARTED = 0;
 	size_t msgSize = D1BINS*sizeof(double);
         nsweeps = N*N*N/nprocs > 0 ? N*N*N/nprocs : 1 ;
-	for(lnwlf=1.0;lnwlf>ModFactorFinal;lnwlf=lnwlf/IterationFactor)
+	initWL();
+	if(myrank==0)
+		printf("Ecut: %f\n", (E_0/invdWLD1+WLD1min)*N_3);
+	for(lnwlf=ModFactorInit;lnwlf>ModFactorFinal;lnwlf=lnwlf/IterationFactor)
 	{
 		IterSweeps=0;
 		resetWL();
 		tmp_flat=0.0;
 		MPI_Barrier(MPI_COMM_WORLD);
 #ifdef  GLOBAL_UPDATE
-		global_update(N_3, Flatness*lnwlf);
+		//global_update(N_3, Flatness*lnwlf);
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
-			if(TotalSweeps%int(pow(10, numf))==0)
+			if(TotalSweeps%int(pow(2, numf))==0 && currEtot < (E_0/invdWLD1+WLD1min)*N_3)
                                 vae_update(WLdos);
 
 			sweepWL(N_3, WLdos);
@@ -132,12 +135,12 @@ int main(int argc, char *argv[])
 					tok = std::chrono::high_resolution_clock::now();
 			        for(i=0;i<D1BINS;i++){
 					wlH[i] += wlHd[i];
-					wllng[i] += wlHd[i]*lnwlf;    //wllngd[i];
+					wllng[i] += wlHd[i]*((i < E_0)? k_f*lnwlf : lnwlf);    //wllngd[i];
 				}	
 				memset(wllngi, 0, D1BINS*sizeof(double));
 				//memset(wlHi, 0, D1BINS*sizeof(int));
 				memset(wlHi, 0, D1BINS*sizeof(unsigned short));
-				tmp_flat=flatWL();
+				tmp_flat=flatWL(WLdos);
 				if( (IterSweeps %100)==0 &&  myrank == 0)
 					write_DOS_H();
 			};
@@ -153,6 +156,8 @@ int main(int argc, char *argv[])
 
                 }
 		numf=numf+1;
+		k_f = int(k_f/2) > 0 ? int(k_f/2) : 1; 
+		E_0 = E_0 - int(0.01*D1BINS);  
 	}
 	if(myrank == 0){
 		end = time(NULL);
@@ -182,7 +187,6 @@ int main(int argc, char *argv[])
                 IterSweeps+=1;
                 TotalSweeps+=1;
 
-                lnwlf = 1.0/TotalSweeps;
         }
 	memset(wllngi, 0, D1BINS*sizeof(double));
 	memset(wllngd, 0, D1BINS*sizeof(double));

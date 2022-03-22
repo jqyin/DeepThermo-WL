@@ -55,7 +55,7 @@ void freeWL();
 void sweepWL(int sweeeps, SamplingMode mode);//runs sweeps WL attempts
 void wlhybrid();
 void resetWL(void);//resets H histogram array
-double flatWL(void); //returns H_min/H_avg
+double flatWL(SamplingMode); //returns H_min/H_avg
 
 void write_DOS_H(void);
 void read_DOS_H(void);

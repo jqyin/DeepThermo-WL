@@ -32,13 +32,13 @@ void LoadClientModel(std::string model_path){
 	encoder_name = "encoder_"+hea;
         std::string model = model_path + "/" + encoder_name + ".pb";
         (*SRclient).set_model_from_file(encoder_name+std::to_string(myrank), model, "TF", "GPU", 
-				1, 1, "vae", {"input_1"}, {"dense_1/BiasAdd"});
+				1, 1, "vae", {"input_1"}, {"Identity"});
 	std::cout << encoder_name << " loaded: " << (*SRclient).model_exists(encoder_name+std::to_string(myrank)) << std::endl;
 
 	decoder_name = "decoder_"+hea;
         model = model_path + "/" + decoder_name + ".pb";
         (*SRclient).set_model_from_file(decoder_name+std::to_string(myrank), model, "TF", "GPU", 
-				1, 1, "vae", {"input_2"}, {"conv3d_transpose_3_1/Sigmoid"});
+				1, 1, "vae", {"input_2"}, {"Identity"});
 	std::cout << decoder_name << " loaded: " << (*SRclient).model_exists(decoder_name+std::to_string(myrank)) << std::endl;
 }
 

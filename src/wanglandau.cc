@@ -13,7 +13,7 @@
 
 extern int myrank, nprocs;
 
-double flatWL(void)
+double flatWL(SamplingMode mode)
 {
 	int i,k;
 	double Hi,avg,min;
@@ -25,7 +25,12 @@ double flatWL(void)
   
 	//This loop finds the flatness and the number of unsampled bins
 	for(i=0;i<D1BINS;++i){
-		Hi = wlH[i]*((i < E_0)? k_f : 1.0);
+		if(mode == WLprior)
+			Hi = wlH[i];
+		else{
+			Hi = (i < E_0)? k_f : 1.0;
+			Hi = wlH[i]*Hi;
+		}
 		if(mask[i]==1)
 		{			
 			//minimum of the histogram
@@ -76,7 +81,11 @@ void resetWL()
 	}
 //	for(i=0;i<D1BINS;++i)
 //		wllng[i] -= maxg;
-  
+	//start from order states
+	//float z[3] = {3, 3, 3}; 
+	//walk(z);
+	//decode(z);
+	//printf("myrank=%d, startE=%g\n", myrank, currEtot/N_3);  
 }
 
 //reads in a mask.dat file
@@ -114,17 +123,19 @@ void readg(void)
 	char s1[512];
 	double tmp;
   
-//	sprintf(s1,"DOS_H_iter%03d.dat",numf);
 	ifp=fopen("g.dat","r");
-	//Reading in the DOS and histogram from the restart function
-	fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\t%lg\n",&numf,&lnwlf,&TotalSweeps,&i, &tmp, &tmp);
-	//fprintf(stderr,"#%d\t%lg\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,tmp);
-	for(i=0;i<D1BINS;++i)
-    {
-		fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wllng[i]),&(wlH[i]),&tmp );
-		//fprintf(stderr,"%g\t%18.10e\t%g\n",tmp,wllng[i],wlH[i]);
-    };
-	fclose(ifp);
+	if(ifp != NULL){
+		//Reading in the DOS and histogram from the restart function
+		fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&ModFactorInit,&TotalSweeps,&IterSweeps, &tmp);
+		printf("restart from: numf %d  lnwlf %g \n", numf, ModFactorInit);
+		//fprintf(stderr,"#%d\t%lg\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,tmp);
+		for(i=0;i<D1BINS;++i)
+    		{
+			fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wllng[i]),&tmp, &tmp );
+			//fprintf(stderr,"%g\t%18.10e\t%g\n",tmp,wllng[i],wlH[i]);
+    		};
+		fclose(ifp);
+	}
   
 }
 
@@ -153,7 +164,7 @@ void write_DOS_H(void)
 	};
   
 	//Label each iteration with the mod. factor, number of sweeps, and flatness
-	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL()); //1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot  );
+	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL(WLdos)); //1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot  );
 	for(i=0;i<D1BINS;++i)
 	{
 		//Printing Out 1D Data
@@ -251,6 +262,14 @@ void initWL(void)
 		//exit(-1);
 	};
 	LOWESTE = 0; //(int) ((currEtot*invN-WLD1min)*invdWLD1);
+	
+        E_0 = int(0.2*D1BINS);
+	//checkpoint
+	readg();
+	k_f = k_f/pow(2, numf-1);
+	E_0 = E_0 - int((numf-1)*0.01*D1BINS);
+	printf("k_f %d  E_0 %d\n", k_f, E_0);
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void freeWL(){
@@ -317,7 +336,7 @@ void global_update(int nsweeps, double Flat){
 			memset(wllngi, 0, D1BINS*sizeof(double));
 			//memset(wlHi, 0, D1BINS*sizeof(int));
 			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
-			tmp_flat=flatWL();
+			tmp_flat=flatWL(WLprior);
 			if( (IterSweeps %100)==0 &&  myrank == 0)
 				write_DOS_H();
 		}
@@ -406,18 +425,13 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 
 	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
     	{
-		/*if(fti < 0 ){
-			printf("Emin not low enough! Ei = %g, Ef=%g\n", Ei, Ef);
-			exit(-1);
-		}
-		if(fti >=D1BINS){*/
 			wlHi[iti]+=1;
-			//wllngi[iti]+=lnwlf;	
-			//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
-			wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+			if(mode == WLprior)
+				wllngi[iti]+= lnwlf;	
+			else
+				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
+			//	wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );	
 			return 0;
-		//}
-
     	}
 	else
     	{
@@ -434,31 +448,39 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 		if(randd1()<R)
 		{
 			//accept
-			if(mode == WLdos || mode == WLprior){
+			if(mode == WLprior){
 				acceptrot[iti] += 1;
 	    			wlHi[fti]+=1;
-				//wllngi[fti]+=lnwlf;		
-				//wlHi[fti]+= (fti > E_0)? 1.0/(1.0+k_f): 1.0;
-				wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;
+				wllngi[fti]+= lnwlf;
+			}else if(mode == WLdos){
+				acceptrot[iti] += 1;
+	    			wlHi[fti]+=1;
+				wllngi[fti]+= (fti < E_0)? k_f*lnwlf : lnwlf;	
+				//wllngi[fti]+= lnwlf/ ( (fti < E_0)? 1.0*(E_0-fti)/k_f+1.0:1.0 );
 			}else if(mode == WLproduction){
 				OrderParameter(fti);
 	    			wlHi[fti]+=1;
-				wllngi[fti]+= (fti < E_0)? lnwlf+lngk_f: lnwlf;
+				wllngi[fti]+= (fti < E_0)? k_f*lnwlf : lnwlf;	
+				//wllngi[fti]+= lnwlf/ ( (fti < E_0)? 1.0*(E_0-fti)/k_f+1.0:1.0 );
 			}	
 			return 1;
 		}
 		else
 		{
 			//reject
-			if(mode == WLdos || mode == WLprior){
+			if(mode == WLprior){
 				wlHi[iti]+=1;
-				//wllngi[iti]+=lnwlf;	
-				//wlHi[iti]+= (iti > E_0)? 1.0/(1.0+k_f): 1.0;
-				wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+				wllngi[iti]+= lnwlf;
+
+			}else if(mode == WLdos){
+				wlHi[iti]+=1;
+				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
+				//wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );
 			}else if(mode == WLproduction){
 				OrderParameter(iti);
 				wlHi[iti]+=1;
-				wllngi[iti]+= (iti < E_0)? lnwlf+lngk_f: lnwlf;	
+				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
+				//wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );
 			}	
 			return 0;
 		};

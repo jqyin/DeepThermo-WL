@@ -567,7 +567,19 @@ void decode(float* z){
 	for(t=0;t<NE;t++)
 		assert(sum[t] == NT[t]);
 	ini_W();
-	 
+
+	//debug	
+/*	for(t=0;t<NE;t++)
+		sum[t] = 0;
+  	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++)
+			sum[Atom[i*N_2+j*N+k]]++;
+	for(t=0;t<NE;t++){
+		if(sum[t] != NT[t]){
+			std::cout << "rank: " << myrank << " sum-" << t << ":" << sum[t] << std::endl;
+			write_xyz(myrank);
+		}
+		assert(sum[t] == NT[t]);
+	}*/
 }
 
 void vae_update(SamplingMode mode){

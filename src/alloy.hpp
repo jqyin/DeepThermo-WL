@@ -18,12 +18,16 @@
 
 static const char* element[]={"HEA", "Mo","Nb","Ta","W"};
 static const double mlp_intercept = -17409.5; //-17351.3;//-21834;//-23926.1; //mev
+// MoNbTaW
 static const double reglin_intercept = -1.2702430255548436; //Ry
-static const int E_0 = 100;
-static const int k_f = 1;
-static const int lngk_f = log(k_f);
+// MoNbTaVW
+//static const double reglin_intercept = -1.7414431589249322; //Ry
+// MoNbTaTiW
+//static const double reglin_intercept = -1.5945920830411398;
+GLOBAL int E_0; 
+GLOBAL int k_f;
 
-static const double Z_R = 0.01;
+static const double Z_R = 0.1;
 GLOBAL int VAE_D, SHIFT, PAD; 
 GLOBAL float* inputConfig;
 //GLOBAL float z[3];
@@ -75,6 +79,8 @@ double Esite(int i, int j, int k);
 void wolff(int i, int j, int k, double rx, double ry, double rz);
 void BondSwap(SamplingMode);
 void vae_update(SamplingMode);
+void decode(float* z);
+void walk(float* npos);
 void Vol();
 double L1();
 void write_pos();
