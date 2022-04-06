@@ -1,0 +1,4 @@
+[submodule "vae-modeling"]
+	path = vae-modeling
+	url = https://code.ornl.gov/jqyin/deepthermo
+	branch = tfv2
