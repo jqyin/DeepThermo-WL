@@ -1,0 +1,19 @@
+#!/bin/bash -l
+#SBATCH -J hea
+#SBATCH -N 1
+#SBATCH -t 30
+#SBATCH -A stf016
+#SBATCH -C nvme
+#SBATCH --exclusive
+#SBATCH --ntasks-per-node=8
+#SBATCH -o hea.o%j
+
+module load rocm
+
+NUM_RANKS=`expr ${SLURM_NNODES} \* ${SLURM_NTASKS_PER_NODE}`
+NUM_RANKS_PER_NODE=${SLURM_NTASKS_PER_NODE}
+
+export OMP_NUM_THREADS=4
+
+HOME=/tmp srun --nodes=${SLURM_NNODES} --ntasks=${NUM_RANKS} --ntasks-per-node=${NUM_RANKS_PER_NODE} ./hea-wl wlrun1D.input 123
+

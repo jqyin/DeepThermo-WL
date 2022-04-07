@@ -8,20 +8,16 @@
 #BSUB -q debug
 
 
-source mysmartsim-env.sh
+source env.sh
 
 export SMARTSIM_LOG_LEVEL=developer
-export OMP_NUM_THREADS=42
+export OMP_NUM_THREADS=4
 
 NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch | wc -l)
 for g in $(seq 1 6); do
-    #jsrun -n${NODES} -a1 -c2 -g1 -r1 redis-server --port $((6780+g)) --logfile log.$g  --loadmodule /gpfs/alpine/scratch/junqi/stf011/smartsim/smartsim/smartsim/lib/redisai.so &
     jsrun -n${NODES} -a1 -c2 -g1 -r1 redis-server --port $((6780+g)) --logfile /tmp/log.$g  --loadmodule /gpfs/alpine/scratch/junqi/stf011/smartsim/smartsim/smartsim/lib/redisai.so &
 done
 sleep 10
-
-#jsrun -n${NODES} -a1 -c2 -r1 singularity exec --bind `pwd`:/home --pwd /home \
- #                            haproxy_latest.sif haproxy -d -f haproxy-grpc.cfg >& log.hsptocy & 
 
 export PAMI_IBV_ENABLE_DCT=0
 export PAMI_ENABLE_STRIPING=0
@@ -33,9 +29,6 @@ ENABLE_SHARP="-E HCOLL_MAIN_IB=mlx5_0:1 -E HCOLL_ENABLE_SHARP=2 -E HCOLL_SHARP_N
 
 ENABLE_HCOLL="-mca coll_hcoll_enable 1 -mca coll_hcoll_np 0 -mca coll ^basic -mca coll ^ibm -HCOLL -FCA"
 
-#head=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch | head -n1)
-
-#ssh $head nvidia-smi stats -d gpuUtil,memUtil -f $(pwd)/log.gpu.n${NODES}.${LSB_JOBID} &
 
 if (( NODES > 256 ))
 then 
@@ -43,4 +36,3 @@ then
 else
     jsrun -n${NODES} -a 12 -c 24 -r 1 --bind=proportional-packed:2 --launch_distribution=packed ./hea-wl wlrun1D.input 123
 fi
-#jskill all
