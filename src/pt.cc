@@ -47,7 +47,6 @@ void ini_sys(){
 
 	Atom=(short*)malloc(sizeof(short)*N_3);
 	Atomo=(short*)malloc(sizeof(short)*N_3);
-	//Atom=(uint8_t*)malloc(sizeof(uint8_t)*N_3);
 	cluster = (bool*)malloc(sizeof(bool)*N_3);
 	att=acc=0;
 	init_genrand(myrank*rand());
@@ -160,7 +159,6 @@ void swap(bool even){
 
 
 	ini_W();
-	//MPI_Barrier(MPI_COMM_WORLD);
 
 	free(buf_ui);
 	free(buf_uj);
@@ -200,58 +198,7 @@ void mchybrid(SamplingMode mode){
 	for(cnt=0; cnt<N*N*N; cnt++){
 		BondSwap(mode);
 	}
-	//vae_update(mode);
-/*	for(i = 0; i < N; i++)
-		for(j = 0; j < N; j++)
-			for(k = 0; k < N; k++)
-				cluster[i*N_2+j*N+k] = false;
-
-		i = (int) (randd1()*N);
-		j = (int) (randd1()*N);
-		k = (int)(randd1()*N);		
-	do{
-		eta1 = 1.0 - 2.0*randd1();
-		eta2 = 1.0 - 2.0*randd1();
-		etasq = eta1*eta1 + eta2*eta2;
-	 }while(etasq >1.0);
-	//these are the new unit vectors
-	rx = 2.0*eta1*sqrt(1.0-etasq);
-	ry = 2.0*eta2*sqrt(1.0-etasq);
-	rz = 1.0 - 2.0*etasq;	
-	wolff(i,j,k, rx,ry,rz);
-	currEtot = Etot();
-*/
 }
-/*
-void correlation(double* avgScorr){
-	int cnt,i,j,k,shell,ii;
-	int nn[MAX_NEIGHBORS*3]; // 10 shells contains 200 neighbors for fcc; 
-	double sx,sy,sz,Scorr, spin_corr[SH];
-	int x,y,z;
-	for(shell=0; shell < SH; shell++)
-		spin_corr[shell] = 0.0;
-	for(i = 0; i < N; i++)for(j = 0; j < N; j++)for(k = 0; k < N; k++){
-		neighbor(i,j,k,nn);
-		cnt = 0; 
-		sx = S[i*N_2+j*N+k];	
-		sy = S[N_3+i*N_2+j*N+k];	
-		sz = S[2*N_3+i*N_2+j*N+k];	
-		for(shell =0; shell < SH; shell++){
-			Scorr = 0.0;
-			for(ii=0;ii<NS[shell];ii++){
-				x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-				Scorr += sx*S[x*N_2+y*N+z]+
-						    sy*S[N_3+x*N_2+y*N+z]+
-						    sz*S[2*N_3+x*N_2+y*N+z];
-			}
-			spin_corr[shell] += Scorr/NS[shell];
-		}
-	}
-	for(shell=0; shell < SH; shell++){
-		spin_corr[shell] /= N_3;
-		avgScorr[shell] += spin_corr[shell];
-	}
-}*/
 
 void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, SamplingMode mode){
 	int mcs,i,j,k,n, t;
@@ -397,18 +344,14 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 #endif
 		mcs++;
 	};
-	// output spin configuration;
 	if(myrank == 0)
 		write_pos(); 
-	//write_xyz(SAMPS);
 	avgE/=1.0*SAMPS;
         avgE2/=1.0*SAMPS;
 	avgM/=1.0*SAMPS;
         avgM2/=1.0*SAMPS;
         avgM4/=1.0*SAMPS;
 	c = (avgE2 - avgE*avgE)*E_scale*E_scale/(T_scale*T_scale*pT*pT) ;
-	//for(i=0;i<SH;i++)
-	//  	avgScorr[i]/=1.0*SAMPS;
 	x = (avgM2 - avgM*avgM)*N_3/pT/T_scale;
         bc = 1 - avgM4/avgM2/avgM2/3;
 
@@ -443,7 +386,6 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 	MPI_Gather(&avgE, 1, MPI_DOUBLE, Ea, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&avgM, 1, MPI_DOUBLE, Ma, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&c, 1, MPI_DOUBLE, ca, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
-	//MPI_Gather(avgScorr, SH, MPI_DOUBLE, Scorra, SH, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&x, 1, MPI_DOUBLE, xa, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&bc, 1, MPI_DOUBLE, bca, 1, MPI_DOUBLE, 0 , MPI_COMM_WORLD);
 	MPI_Gather(&att, 1, MPI_INT, attempts, 1, MPI_INT, 0 , MPI_COMM_WORLD);
@@ -461,24 +403,8 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 		}	
 		fclose(ofp);
 		  
-		/*sprintf(s, "Scorr%d.dat", irun);
-		ofp = fopen(s,"w");
-		fprintf(ofp, "r(a)\\T(K)\t");
-		for(n=0;n<nT;n++){
-			fprintf(ofp, "%g\t", T[n]);
-		}
-		fprintf(ofp, "\n");
-		for(i=0; i<SH;i++){
-			fprintf(ofp, "%g\t",Dist[i]);
-			for(n=0;n<nT;n++){
-				fprintf(ofp, "%g\t", Scorra[n*SH+i]);
-			}
-			fprintf(ofp, "\n");
-		}*/ 
-
 		sprintf(s, "misc%d.dat", irun);
 		ofp2 = fopen(s,"w");
-	//	 fprintf(ofp2,"Avg_diff:%g  Avg_rot:%g Sample size:%d\n",1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot,  (int)SAMPS);
 		fprintf(ofp2,"swap prob:\n");
 		for(n=0;n<nT-1;n++){
 			fprintf(ofp2,"%g\t%g\n",T[n], 1.0*accepts[n]/attempts[n]);		
@@ -506,7 +432,6 @@ void parallel_tempering(int nT,double DROPI,double SAMPS, double SEP, int irun, 
 
 void freePT(){
 	int t;
-	//free(Atom);
 	free(cluster);
 	free(T);
 	for(t=0; t<NE; t++)

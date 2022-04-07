@@ -1,5 +1,3 @@
-//WL ground state searching
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,10 +16,8 @@
 #include "client.hpp"
 #endif
 
-
 int nprocs;
 int myrank;
-//#define NDEBUG
 
 int main(int argc, char *argv[])
 {
@@ -73,7 +69,7 @@ int main(int argc, char *argv[])
 	printf("Etot = %g\n", currEtot);
 
 	//warm up with parallel tempering 
-	/*parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,metropolis);
+	parallel_tempering(nprocs,MDROP,MSAMPS,MSEP,0,metropolis);
 	MPI_Allreduce(&currEtot, &ptEmin, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
 	MPI_Allreduce(&currEtot, &ptEmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 	if(ptEmin/N_3 < WLD1min)
@@ -81,7 +77,7 @@ int main(int argc, char *argv[])
 	if(ptEmax/N_3 > WLD1max)
 		WLD1max = ptEmax/N_3;
 	printf("ptEmin = %g  ptEmax = %g\n", ptEmin, ptEmax);
-	*/
+	
         if(myrank == 0){
                 ofp_run=fopen("run.dat","a");
                 ofp_comm=fopen("comm.dat","w");
@@ -92,7 +88,6 @@ int main(int argc, char *argv[])
 
 	//Initialize the Wang-Landau sampling parameters
         numf=1;
-	k_f = int(nprocs/10) > 0 ? int(nprocs/10) : 1; 
 	STARTED = 0;
 	size_t msgSize = D1BINS*sizeof(double);
         nsweeps = N*N*N/nprocs > 0 ? N*N*N/nprocs : 1 ;
@@ -106,7 +101,7 @@ int main(int argc, char *argv[])
 		tmp_flat=0.0;
 		MPI_Barrier(MPI_COMM_WORLD);
 #ifdef  GLOBAL_UPDATE
-		//global_update(N_3, Flatness*lnwlf);
+		global_update(N_3, Flatness*lnwlf);
 #endif		
 		while(tmp_flat <= Flatness)
 		{		
@@ -126,8 +121,6 @@ int main(int argc, char *argv[])
 				RingAllreduce(wlHi,msgSize,&wlHd,myrank,nprocs);
 				MPI_Barrier(MPI_COMM_WORLD);
 #else
-				//MPI_Allreduce(wllngi, wllngd, D1BINS, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-				//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 				MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
 				MPI_Barrier(MPI_COMM_WORLD);
 #endif
@@ -135,10 +128,9 @@ int main(int argc, char *argv[])
 					tok = std::chrono::high_resolution_clock::now();
 			        for(i=0;i<D1BINS;i++){
 					wlH[i] += wlHd[i];
-					wllng[i] += wlHd[i]*((i < E_0)? k_f*lnwlf : lnwlf);    //wllngd[i];
+					wllng[i] += wlHd[i]*lnwlf;    
 				}	
 				memset(wllngi, 0, D1BINS*sizeof(double));
-				//memset(wlHi, 0, D1BINS*sizeof(int));
 				memset(wlHi, 0, D1BINS*sizeof(unsigned short));
 				tmp_flat=flatWL(WLdos);
 				if( (IterSweeps %100)==0 &&  myrank == 0)
@@ -156,7 +148,6 @@ int main(int argc, char *argv[])
 
                 }
 		numf=numf+1;
-		k_f = int(k_f/2) > 0 ? int(k_f/2) : 1; 
 		E_0 = E_0 - int(0.01*D1BINS);  
 	}
 	if(myrank == 0){
@@ -169,18 +160,15 @@ int main(int argc, char *argv[])
         resetWL();              
         int count=0;
 	MPI_Barrier(MPI_COMM_WORLD);
-        while(count < ProductionBinSamps){ // (lnwlf > 1e-6){
+        while(count < ProductionBinSamps){ 
 		sweepWL(N_3, WLproduction);
-		//std::cout << "myrank: " << myrank << " E: " << currEtot << std::endl;
 		if( (IterSweeps % 1 ) == 0)
 		{
                         MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
-			//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
                         for(i=0;i<D1BINS;i++){
                         	wlH[i] += wlHd[i];
                                 wllng[i] += wlHd[i]*lnwlf; 
                         }
-			//memset(wlHi, 0, D1BINS*sizeof(int));
 			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
                 }
 		count++;

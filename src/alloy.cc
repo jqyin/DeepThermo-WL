@@ -18,8 +18,6 @@
 extern std::string encoder_name, decoder_name;
 extern int myrank, nprocs;
 void initialize(){
-	//maximum rotational angle;
-	D=1.0*Pi; DD = 0.2;
 	attd=accd=0;
 
 	ini_coupling();
@@ -29,7 +27,6 @@ void initialize(){
 	VAE_D = 2*(N-1)+ SHIFT + 1; 
 	PAD = int((ceil(1.0*VAE_D/16)*16 - VAE_D)/2);
         VAE_D += PAD*2; 
-	//z[0]=z[1]=z[2]=0.0;
 	
 	inputConfig = (float*) malloc(sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
 	memset(inputConfig,0,sizeof(float)*VAE_D*VAE_D*VAE_D*NE);
@@ -68,8 +65,6 @@ void ini_coupling(){
                 if(Nneighbors == 0){
                         Jrold = Jr[0];
                 }else{
-                       // shell by coupling
-                        //if(fabs(Jrold -Jr[0]) > 1e-10){
                         // shell by distance
                         if(fabs(r- Dist[shell]) > 1e-6){
                                 shell++;
@@ -138,7 +133,7 @@ void ini_apos(){
 	int idx, i, j, k, x, y, z, cnt, ii, shell;
 	int nn[MAX_NEIGHBORS*3], cntt;  
 
-// generate neighbor list for neural network inputsa
+// generate neighbor list for neural network inputs
 	for(i=0; i<N; i++)for(j=0; j<N; j++)for(k=0; k<N; k++){
 		neighbor(i,j,k,nn);
 		cnt = cntt = 0; 
@@ -184,10 +179,8 @@ void ini_alloy(int state){
 	for(i=0; i<N; i++)
 		for(j=0; j<N; j++)
 			for(k=0; k<N; k++){		
-				//t = (int)(randd1()*NE);
 				t = list[cnt++];
 				Atom[i*N_2+j*N+k] = t;
-				//cnt[t]++;
 				NT[t]++;
 	}
 	free(list);
@@ -195,43 +188,6 @@ void ini_alloy(int state){
 	for(t = 0 ; t < NE; t++)
 		fprintf(stderr, "%s:%d\n",element[t+1],NT[t]);
 
-
-
-/*	for(t = 0 ; t < NE; t++){
-			while(cnt[t] > Ni[t]){
-
-				do{
-					i = (int) (randd1()*N);
-					j = (int) (randd1()*N);
-					k = (int)(randd1()*N);	
-				}while(Atom[i*N_2+j*N+k] != t);
-
-				do{
-					t2 = (int)(randd1()*NE);
-				}while(t2 <= t);
-				Atom[i*N_2+j*N+k] = t2;
-
-				cnt[t]--;
-				cnt[t2]++;
-			}
-
-			while(cnt[t] < Ni[t]){
-
-				do{
-					i = (int) (randd1()*N);
-					j = (int) (randd1()*N);
-					k = (int)(randd1()*N);	
-				}while(Atom[i*N_2+j*N+k] <= t);
-				t2 = Atom[i*N_2+j*N+k]; 				
-				Atom[i*N_2+j*N+k] = t;
-
-				cnt[t]++;
-				cnt[t2]--;
-			}
-		}
-	for(t=0;t<NE;t++)
-		assert(cnt[t] == Ni[t]);*/
-/////////////////////////////////////////
 }
 
 inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, int cnt){
@@ -247,17 +203,7 @@ inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, i
 	if(sk >= N) sk -= N;
 	nn[cnt++] = si; nn[cnt++] = sj; nn[cnt++] =sk;
 	
-/*	si = i - offi;
-	if(si < 0) si += N;
-	if(si >= N) si -= N;
-	sj = j - offj;
-	if(sj < 0) sj += N;
-	if(sj >= N) sj -= N;
-	sk = k - offk;
-	if(sk < 0) sk += N;
-	if(sk >= N) sk -= N;
-	nn[cnt++] = si; nn[cnt++] = sj; nn[cnt++] =sk;
-*/}
+}
 void  neighbor(int i, int j, int k, int* nn){
 	int ii,cnt=0;
 	for(ii=0;ii<Nneighbors;ii++){
@@ -289,10 +235,6 @@ void updateWsite(int ai, int aj, int pi, int pj){
 }
 
 void updateW(int ai, int aj, int idxi, int idxj){
-        //updateWsite(Atom[idxi],idxi,idxj,false);
-        //updateWsite(Atom[idxj],idxi,idxj,true);
-        //updateWsite(Atom[idxj],idxj,idxi,false);
-        //updateWsite(Atom[idxi],idxj,idxi,true);
         updateWsite(ai, aj, idxi, idxj);
         updateWsite(aj, ai, idxj, idxi);
 }
@@ -313,86 +255,12 @@ double Etot(){
 	return E*N_3; 
 
 }
-/*
-double Esite(int i, int j, int k){
 
-	int ii,cnt,ti,tj,x,y,z, shell;
-	double sx, sy, sz;
-	double Elocal = 0.0;
-	int nn[MAX_NEIGHBORS*3]; // 10 shells contains 200 neighbors for fcc; 
-
-	ti = Atom[i*N_2+j*N+k];
-
-	neighbor(i,j,k,nn);
-	cnt = 0; 
-	for(shell =0; shell < SH; shell++){
-		for(ii=0;ii<NS[shell];ii++){
-			x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-			tj = Atom[x*N_2+y*N+z];
-		}
-	}
-	
-	tensorflow::TensorShape data_shape({1, 6});
-        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-        
-        auto data_ = data.flat<float>().data();
-        data_[0] = 0;
-	data_[1] = 0;
-  	data_[2] = 1;
-  	data_[3] = 1;
-  	data_[4] = 0;
-  	data_[5] = 0;
-
-	tensor_dict feed_dict = {
-      		{"input_liz:0", data},
-  	};
-	std::vector<tensorflow::Tensor> outputs;
-	TF_CHECK_OK(
-		sess->Run(feed_dict, {"sequential/BiasAdd_2:0"}, {}, &outputs));
-	Elocal = outputs[0].flat<float>().data()[0];
-
-        //std::cout<< Elocal << std::endl; 
-	return Elocal;
-}*/
-/*
-void wolff(int i, int j, int k, double rx, double ry, double rz){
-
-	double sx,sy,sz,pi,pj, delta;
-	int ti,tj, cnt, ii, shell, x, y, z, nn[MAX_NEIGHBORS*3];
-
-	cluster[i*N_2+j*N+k] = true;
-	sx = S[i*N_2+j*N+k];
-	sy = S[N_3+i*N_2+j*N+k];
-	sz = S[2*N_3+i*N_2+j*N+k];
-	pi = (sx*rx + sy*ry + sz*rz);
-	ti = Atom[i*N_2+j*N+k];
-
-	S[i*N_2+j*N+k] = sx - 2*pi*rx;
-	S[N_3+i*N_2+j*N+k] = sy - 2*pi*ry;
-	S[2*N_3+i*N_2+j*N+k] = sz - 2*pi*rz;
-
-		neighbor(i,j,k,nn);
-		cnt = 0; 
-		for(shell =0; shell < SH; shell++){
-			for(ii=0;ii<NS[shell];ii++){
-				x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-				if(!cluster[x*N_2+y*N+z]){
-					tj = Atom[x*N_2+y*N+z];
-					pj = (S[x*N_2+y*N+z]*rx + S[N_3+x*N_2+y*N+z]*ry + S[2*N_3+x*N_2+y*N+z]*rz);
-					delta = -2*J[ti][tj][shell]/(T_scale*pT)*pi*pj;
-					if(delta < 0 && randd1() < (1-exp(delta)) )	
-						wolff(x,y,z,rx,ry,rz);
-				}
-			}
-		}
-}
-*/
 void BondSwap(SamplingMode mode){
 	int i, j, k, x, y, z, ii, jj, kk, n, it, shell;
 	int ai, aj, cnt, cntE; 
 	int Wo[NE][NE][SH];
 	double deltaE, dE, E1, E2;
-        //int nn[MAX_NEIGHBORS*3];
 
         i = (int) (randd1()*N_3);
         n = (int) (randd1()*Nneighbors);
@@ -408,10 +276,10 @@ void BondSwap(SamplingMode mode){
         	E2 = Etot();
 
         	deltaE = E2 - E1;
-        	//attd++;
+        	attd++;
 		if(mode == metropolis){//metropolis
         		if(Metropolis(currEtot, currEtot+deltaE) == 1){// accept
-        			currEtot += deltaE; //accd++;
+        			currEtot += deltaE; accd++;
         		}else{//reject
                 		Atom[i] = ai;
                 		Atom[j] = aj;
@@ -420,14 +288,13 @@ void BondSwap(SamplingMode mode){
 		}
 		else{//wanglandau
         		if(WangLandau(currEtot, currEtot+deltaE, mode) == 1){// accept
-                		currEtot += deltaE; //accd++;
+                		currEtot += deltaE; accd++;
         		}else{//reject
                 		Atom[i] = ai;
                 		Atom[j] = aj;
                 		memcpy(W, Wo, sizeof(int)*NE*NE*SH);
         		}
 
-			//std::cout << "E: " << currEtot << std::endl;
 		}
     	}
 
@@ -494,13 +361,6 @@ void walk(float* npos){
 	npos[0] += Z_R*v1;
 	npos[1] += Z_R*v2;
 	npos[2] += Z_R*v3; 
-	
-	// line
-	/*a = randd1()*2 - 1;
-	npos[0] += Z_R*a;
-	npos[1] += Z_R*a;
-	npos[2] += Z_R*a;*/
-	
 
 }
 
@@ -568,18 +428,6 @@ void decode(float* z){
 		assert(sum[t] == NT[t]);
 	ini_W();
 
-	//debug	
-/*	for(t=0;t<NE;t++)
-		sum[t] = 0;
-  	for(i=0;i<N;i++)for(j=0; j<N;j++)for(k=0;k<N;k++)
-			sum[Atom[i*N_2+j*N+k]]++;
-	for(t=0;t<NE;t++){
-		if(sum[t] != NT[t]){
-			std::cout << "rank: " << myrank << " sum-" << t << ":" << sum[t] << std::endl;
-			write_xyz(myrank);
-		}
-		assert(sum[t] == NT[t]);
-	}*/
 }
 
 void vae_update(SamplingMode mode){
@@ -628,7 +476,6 @@ void vae_update(SamplingMode mode){
 void write_pos(){
   char s[512];
   FILE *ofp;
-  //sprintf(s,"compos%d.dat",myrank);
   ofp=fopen("compos.dat","w");
 	int i,j,k;
 	for(i=0;i<N;i++)
@@ -650,12 +497,10 @@ void write_xyz(int frame)
   fprintf(ofp, "%d\n", N_3); 
   fprintf(ofp,"Eng = %.8lg  MC_step = %d\n", currEtot, frame);
 
-  //sum = 0.0;
   for(shell = 0; shell < SH; shell++)
         for(i =0; i < NE-1; i++)
                 for(j =i+1; j < NE; j++){
                         fprintf(ofp, "%.8lg\t",1.0*W[i][j][shell]/NS[shell]/N_3);
-                        //sum += 1.0*W[i][j][shell]/NS[shell]/N_3;
                 }
   fprintf(ofp, "\n");
 

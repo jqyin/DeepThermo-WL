@@ -7,11 +7,8 @@
 #include <tensorflow/core/protobuf/meta_graph.pb.h>
 #include <tensorflow/core/public/session_options.h>
 #include <tensorflow/cc/saved_model/loader.h>
-//#include <tensorflow/cc/saved_model/tag_constants.h>
 
 using namespace std;
-//using tensorflow::string;
-//using tensorflow::tstring;
 using tensorflow::Tensor;
 using tensorflow::SavedModelBundle;
 using tensorflow::SessionOptions;

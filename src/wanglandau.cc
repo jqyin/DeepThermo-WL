@@ -25,12 +25,7 @@ double flatWL(SamplingMode mode)
   
 	//This loop finds the flatness and the number of unsampled bins
 	for(i=0;i<D1BINS;++i){
-		if(mode == WLprior)
-			Hi = wlH[i];
-		else{
-			Hi = (i < E_0)? k_f : 1.0;
-			Hi = wlH[i]*Hi;
-		}
+		Hi = wlH[i];
 		if(mask[i]==1)
 		{			
 			//minimum of the histogram
@@ -50,19 +45,7 @@ double flatWL(SamplingMode mode)
 	if(k==0)
 		avg=1.0;  //This keeps from dividing by zero
   
-	//This loop counts the number of bins below the flatness criteria
-  /*
-    for(i=0;i<D1BINS;++i)
-    for(j=0;j<D2BINS;++j)
-    if(mask[i]==1)
-    {
-    if( wlH[i]<Flatness*avg )
-    numbelow_flat+=1.0;
-    };
-    //Stores the percentage of states below the flatness criteria	
-    numbelow_flat = (numbelow_flat)/(1.0*D1BINS*D2BINS);
-  */
-	numbelow_flat = 0.0;  //Turned off for now
+	numbelow_flat = 0.0;  
 	//returns the current flatenss of the histogram		
 	return min/avg;
   
@@ -73,19 +56,9 @@ double flatWL(SamplingMode mode)
 void resetWL()
 {
 	int i;
- //   double maxg = -1e300;
 	for(i=0;i<D1BINS;++i){
 		wlH[i]=0;
-//		if(wllng[i] > maxg)
-//			maxg = wllng[i];
 	}
-//	for(i=0;i<D1BINS;++i)
-//		wllng[i] -= maxg;
-	//start from order states
-	//float z[3] = {3, 3, 3}; 
-	//walk(z);
-	//decode(z);
-	//printf("myrank=%d, startE=%g\n", myrank, currEtot/N_3);  
 }
 
 //reads in a mask.dat file
@@ -128,11 +101,9 @@ void readg(void)
 		//Reading in the DOS and histogram from the restart function
 		fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&ModFactorInit,&TotalSweeps,&IterSweeps, &tmp);
 		printf("restart from: numf %d  lnwlf %g \n", numf, ModFactorInit);
-		//fprintf(stderr,"#%d\t%lg\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,tmp);
 		for(i=0;i<D1BINS;++i)
     		{
 			fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wllng[i]),&tmp, &tmp );
-			//fprintf(stderr,"%g\t%18.10e\t%g\n",tmp,wllng[i],wlH[i]);
     		};
 		fclose(ifp);
 	}
@@ -149,10 +120,8 @@ void write_DOS_H(void)
 	double ming=1.0e300;
   
 	//uncomment the following line to output in log_10
-	//tmp=log10(exp(1.0));
 	sprintf(s1,"DOS_H_iter%03d.dat",numf);
 	ofp=fopen(s1,"w");
-	//ofp=fopen("g.dat","w");
   
 	//Find the minimum of the DOS
 	for(i=0;i<D1BINS;++i)
@@ -168,7 +137,6 @@ void write_DOS_H(void)
 	for(i=0;i<D1BINS;++i)
 	{
 		//Printing Out 1D Data
-		//fprintf(ofp,"%g\t%g\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),wlH[i]);
 		fprintf(ofp,"%.8f\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),1.0*wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
 	};
   
@@ -196,17 +164,7 @@ void initWL(void)
 	//correct the int cut off;
      	WLD1max = WLD1min +  D1BINS/invdWLD1;   
 
-	//this value times Ebond-WLEbondmin, gives the bin number;
-	//WLinvdEbond=(1.0*Lbond)/(WLEbondmax-WLEbondmin);
-	//WLinvdEnonbond=(1.0*Lnonbond)/(WLEnonbondmax-WLEnonbondmin);
-
-	//Dynamic Memory Allocation - this has to be done because an input file is used.
-	//WL 2D Arrays - Histogram, Density of States, Mask, and Rawmask
-	//allocate storage for an array of pointers
-  
 	wlH = (double*)malloc( D1BINS * sizeof(double) );
-	//wlHd = (int*)malloc( D1BINS * sizeof(int) );
-	//wlHi = (int*)malloc( D1BINS * sizeof(int) );
 	wlHd = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
 	wlHi = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
 	wllng = (double*)malloc( D1BINS * sizeof(double ) );
@@ -232,7 +190,6 @@ void initWL(void)
 	//Initialize Arrays
 	for(i=0;i<D1BINS;++i)
 	{
-
 		wllng[i]=0.0;
 		wllng_prior[i]=0.0;
 		wllngd[i]=0.0;
@@ -259,16 +216,13 @@ void initWL(void)
 
 	if(currEtot*invN<WLD1min){ // extend ground energy;
 		fprintf(stderr,"currEtot/N: %g  \n",currEtot*invN);
-		//exit(-1);
 	};
-	LOWESTE = 0; //(int) ((currEtot*invN-WLD1min)*invdWLD1);
+	LOWESTE = 0; 
 	
         E_0 = int(0.2*D1BINS);
 	//checkpoint
 	readg();
-	k_f = k_f/pow(2, numf-1);
 	E_0 = E_0 - int((numf-1)*0.01*D1BINS);
-	printf("k_f %d  E_0 %d\n", k_f, E_0);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -334,7 +288,6 @@ void global_update(int nsweeps, double Flat){
 				wllng_prior[i] += wlHd[i]*lnwlf;    //wllngd[i];
 			}	
 			memset(wllngi, 0, D1BINS*sizeof(double));
-			//memset(wlHi, 0, D1BINS*sizeof(int));
 			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
 			tmp_flat=flatWL(WLprior);
 			if( (IterSweeps %100)==0 &&  myrank == 0)
@@ -356,45 +309,16 @@ void global_update(int nsweeps, double Flat){
 	if(myrank == 0)
 		fp = fopen("global-update-prior.dat", "w");
 	for(i=0;i<D1BINS;++i){
-                //wllng_prior[i] = KAPA*(wllng_prior[i]-ming)/(maxg-ming)*lnwlf;
                 wllng_prior[i] = wllng_prior[i]*lnwlf;
 		wllng[i] += wllng_prior[i];	
 		if(myrank == 0)
 			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min, wllng_prior[i]);
-			//fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min,(wllng_prior[i]-maxg)*lnwlf);
 	}
 	if(myrank == 0)
 		fclose(fp);
         
 	resetWL();
 	
-	
-	/*int i,j;
-	double dg;
-	FILE * fp;
-	double w;
-    	double sum =0.0;
-
-	if(wllng[0] != 0.0) {
-
-		w = (PERW*wllng[0]);     // assuming it's monotonically increase;
-		fp = fopen("after_global_updata.dat", "w");
-		for(i=0;i<D1BINS;++i){
-			if(wllng[i] > w){
-				dg = KAPA*lnwlf * exp( -LAMDA/(wllng[i]-w) );
-				wllng[i] += dg;
-			}
-			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min, dg); //wllng[i]);
-		}
-		fclose(fp);
-	}else{ // first iteration;
-		j = (int)((1-PERW)*D1BINS);
-		for(i=j+1;i<D1BINS;++i){
-			dg = KAPA*lnwlf * exp( -LAMDA/(i-j) );
-			wllng[i] += dg;
-		}
-	
-	}*/
 }
 
 
@@ -417,7 +341,6 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 			//write_xyz(fti - LOWESTE);
 			list[fti - LOWESTE] = true;
 		}
-		//fprintf(stderr,"New Lowest E config %g\n\n",LOWESTE);
 	};
 
 	attemptrot[iti] += 1;
@@ -426,11 +349,8 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
     	{
 			wlHi[iti]+=1;
-			if(mode == WLprior)
-				wllngi[iti]+= lnwlf;	
-			else
-				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
-			//	wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );	
+			wllngi[iti]+= lnwlf;	
+
 			return 0;
     	}
 	else
@@ -448,39 +368,27 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 		if(randd1()<R)
 		{
 			//accept
-			if(mode == WLprior){
+			if(mode == WLprior || mode == WLdos){
 				acceptrot[iti] += 1;
 	    			wlHi[fti]+=1;
 				wllngi[fti]+= lnwlf;
-			}else if(mode == WLdos){
-				acceptrot[iti] += 1;
-	    			wlHi[fti]+=1;
-				wllngi[fti]+= (fti < E_0)? k_f*lnwlf : lnwlf;	
-				//wllngi[fti]+= lnwlf/ ( (fti < E_0)? 1.0*(E_0-fti)/k_f+1.0:1.0 );
 			}else if(mode == WLproduction){
 				OrderParameter(fti);
 	    			wlHi[fti]+=1;
-				wllngi[fti]+= (fti < E_0)? k_f*lnwlf : lnwlf;	
-				//wllngi[fti]+= lnwlf/ ( (fti < E_0)? 1.0*(E_0-fti)/k_f+1.0:1.0 );
+				wllngi[fti]+= lnwlf;	
 			}	
 			return 1;
 		}
 		else
 		{
 			//reject
-			if(mode == WLprior){
+			if(mode == WLprior || mode == WLdos){
 				wlHi[iti]+=1;
 				wllngi[iti]+= lnwlf;
-
-			}else if(mode == WLdos){
-				wlHi[iti]+=1;
-				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
-				//wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );
 			}else if(mode == WLproduction){
 				OrderParameter(iti);
 				wlHi[iti]+=1;
-				wllngi[iti]+= (iti < E_0)? k_f*lnwlf : lnwlf;	
-				//wllngi[iti]+= lnwlf / ( (iti < E_0)? 1.0*(E_0-iti)/k_f+1.0: 1.0 );
+				wllngi[iti]+= lnwlf;	
 			}	
 			return 0;
 		};

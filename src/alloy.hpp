@@ -17,15 +17,13 @@
 #define MAX_NEIGHBORS 300
 
 static const char* element[]={"HEA", "Mo","Nb","Ta","W"};
-static const double mlp_intercept = -17409.5; //-17351.3;//-21834;//-23926.1; //mev
 // MoNbTaW
 static const double reglin_intercept = -1.2702430255548436; //Ry
 // MoNbTaVW
 //static const double reglin_intercept = -1.7414431589249322; //Ry
 // MoNbTaTiW
-//static const double reglin_intercept = -1.5945920830411398;
+//static const double reglin_intercept = -1.5945920830411398; //Ry
 GLOBAL int E_0; 
-GLOBAL int k_f;
 
 static const double Z_R = 0.1;
 GLOBAL int VAE_D, SHIFT, PAD; 
@@ -88,10 +86,5 @@ void write_xyz(int frame);
 void thermoqs();
 void ini_W();
 void OrderParameter(int idx);
-
-// p. b. c.
-//#define BC(I) ( (I>=N)?(I-N):( (I<0)?(I+N):I ) )  
-//#define BCb(I) ( (I>=(N-1) )?(I-(N-1)):( (I<0)?(I+(N-1)):I ) )  
-#define Pi 3.14159265
 
 #endif
