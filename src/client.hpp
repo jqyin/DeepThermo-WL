@@ -9,8 +9,7 @@
 std::string encoder_name, decoder_name;
 SmartRedis::Client* SRclient;
 
-extern int myrank; 
-extern int nprocs; 
+extern MPIState mpiState; 
 
 void LoadClientModel(std::string model_path){
         
@@ -27,19 +26,19 @@ void LoadClientModel(std::string model_path){
 
         std::string hea=""; 
  	for(int i=0; i< NE; i++)
-		hea += std::string(element[i+1]);
+		hea += std::string(alloyState.element[i+1]);
          
 	encoder_name = "encoder_"+hea;
         std::string model = model_path + "/" + encoder_name + ".pb";
-        (*SRclient).set_model_from_file(encoder_name+std::to_string(myrank), model, "TF", "GPU", 
+        (*SRclient).set_model_from_file(encoder_name+std::to_string(mpiState.myrank), model, "TF", "GPU", 
 				1, 1, "vae", {"input_1"}, {"Identity"});
-	std::cout << encoder_name << " loaded: " << (*SRclient).model_exists(encoder_name+std::to_string(myrank)) << std::endl;
+	std::cout << encoder_name << " loaded: " << (*SRclient).model_exists(encoder_name+std::to_string(mpiState.myrank)) << std::endl;
 
 	decoder_name = "decoder_"+hea;
         model = model_path + "/" + decoder_name + ".pb";
-        (*SRclient).set_model_from_file(decoder_name+std::to_string(myrank), model, "TF", "GPU", 
+        (*SRclient).set_model_from_file(decoder_name+std::to_string(mpiState.myrank), model, "TF", "GPU", 
 				1, 1, "vae", {"input_2"}, {"Identity"});
-	std::cout << decoder_name << " loaded: " << (*SRclient).model_exists(decoder_name+std::to_string(myrank)) << std::endl;
+	std::cout << decoder_name << " loaded: " << (*SRclient).model_exists(decoder_name+std::to_string(mpiState.myrank)) << std::endl;
 }
 
 #endif

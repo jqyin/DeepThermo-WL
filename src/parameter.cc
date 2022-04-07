@@ -5,7 +5,7 @@
 #include "parameter.hpp"
 #include "alloy.hpp"
 #include "wanglandau.hpp"
-#include "pt.hpp"
+#include "main.hpp"
 
 
 /*
@@ -32,141 +32,141 @@ void ReadInput(const char* filename)
 
 //Number of Monomers in a Single Chain
 	if (!strcmp(pname, "N")) {
-	  if (sscanf(line, "%*50s %d", &N) != 1) ErrorMsg(2, pname);
-	  if (N < 1) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %d", &alloyState.N) != 1) ErrorMsg(2, pname);
+	  if (alloyState.N < 1) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Nonbonded Potential Selection
 	if (!strcmp(pname, "NBINTERACTION")) {
-	  if (sscanf(line, "%*50s %d", &NBINTERACTION) != 1) ErrorMsg(2, pname);
-	  if ( (NBINTERACTION < 1) || (NBINTERACTION > 4) ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %d", &alloyState.NBINTERACTION) != 1) ErrorMsg(2, pname);
+	  if ( (alloyState.NBINTERACTION < 1) || (alloyState.NBINTERACTION > 4) ) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Bin Width for Primary Sampling Direction	
 	if (!strcmp(pname, "dWLD1")) {
-	  if (sscanf(line, "%*50s %lg", &dWLD1) != 1) ErrorMsg(2, pname);
-	  if (dWLD1 > 10.0 || (dWLD1 < 0.000001)) ErrorMsg(3, pname);  //Generic Boundary Limits
+	  if (sscanf(line, "%*50s %lg", &wlState.dWLD1) != 1) ErrorMsg(2, pname);
+	  if (wlState.dWLD1 > 10.0 || (wlState.dWLD1 < 0.000001)) ErrorMsg(3, pname);  //Generic Boundary Limits
 	  continue;
 	}
 
 //Maximum Boundary for Primary Sampling Direction	
 	if (!strcmp(pname, "WLD1min")) {
-	  if (sscanf(line, "%*50s %lg", &WLD1min) != 1) ErrorMsg(2, pname);
-	  if (WLD1min > 20.0) ErrorMsg(3, pname);  
+	  if (sscanf(line, "%*50s %lg", &wlState.WLD1min) != 1) ErrorMsg(2, pname);
+	  if (wlState.WLD1min > 20.0) ErrorMsg(3, pname);  
 	  continue;
 	}
 	
 //Minimum Boundary for Primary Sampling Direction	
 	if (!strcmp(pname, "WLD1max")) {
-	  if (sscanf(line, "%*50s %lg", &WLD1max) != 1) ErrorMsg(2, pname);
+	  if (sscanf(line, "%*50s %lg", &wlState.WLD1max) != 1) ErrorMsg(2, pname);
 //	  if (WLD1max < -20.0) ErrorMsg(3, pname);  
 	  continue;
 	}
 
 //Flatness Criteria
 	if (!strcmp(pname, "Flatness")) {
-	  if (sscanf(line, "%*50s %lg", &Flatness) != 1) ErrorMsg(2, pname);
-	  if ( (Flatness <= 0.0) || (Flatness >= 1.0) ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &wlState.Flatness) != 1) ErrorMsg(2, pname);
+	  if ( (wlState.Flatness <= 0.0) || (wlState.Flatness >= 1.0) ) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Initial Modification Factor
 	if (!strcmp(pname, "ModFactorInit")) {
-	  if (sscanf(line, "%*50s %lg", &ModFactorInit) != 1) ErrorMsg(2, pname);
-	  if (ModFactorInit <= 0.0) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &wlState.ModFactorInit) != 1) ErrorMsg(2, pname);
+	  if (wlState.ModFactorInit <= 0.0) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Modification Factor Iterator
 	if (!strcmp(pname, "IterationFactor")) {
-	  if (sscanf(line, "%*50s %lg", &IterationFactor) != 1) ErrorMsg(2, pname);
-	  if (IterationFactor <= 0.0) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &wlState.IterationFactor) != 1) ErrorMsg(2, pname);
+	  if (wlState.IterationFactor <= 0.0) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Final Modification Factor	
 	if (!strcmp(pname, "ModFactorFinal")) {
-	  if (sscanf(line, "%*50s %lg", &ModFactorFinal) != 1) ErrorMsg(2, pname);
-	  if (ModFactorFinal <= 0.0) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &wlState.ModFactorFinal) != 1) ErrorMsg(2, pname);
+	  if (wlState.ModFactorFinal <= 0.0) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Turns on the production run (0 = off, 1 = on)	
 	if (!strcmp(pname, "ProductionBinSamps")) {
-	  if (sscanf(line, "%*50s %d", &ProductionBinSamps) != 1) ErrorMsg(2, pname);
-	  if ( ProductionBinSamps < 1 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %d", &wlState.ProductionBinSamps) != 1) ErrorMsg(2, pname);
+	  if ( wlState.ProductionBinSamps < 1 ) ErrorMsg(3, pname);
 	  continue;
 	}
 		
 //Initial Temperture used in Thermoqs()
 	if (!strcmp(pname, "TTi")) {
-	  if (sscanf(line, "%*50s %lg", &TTi) != 1) ErrorMsg(2, pname);
-	  if ( TTi < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &alloyState.TTi) != 1) ErrorMsg(2, pname);
+	  if ( alloyState.TTi < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Final Temperture used in Thermoqs()
 	if (!strcmp(pname, "TTf")) {
-	  if (sscanf(line, "%*50s %lg", &TTf) != 1) ErrorMsg(2, pname);
-	  if ( TTf < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &alloyState.TTf) != 1) ErrorMsg(2, pname);
+	  if ( alloyState.TTf < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Temperture Increment used in Thermoqs()
 	if (!strcmp(pname, "dTT")) {
-	  if (sscanf(line, "%*50s %lg", &dTT) != 1) ErrorMsg(2, pname);
-	  if ( dTT < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &alloyState.dTT) != 1) ErrorMsg(2, pname);
+	  if ( alloyState.dTT < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Turns on Metropolis Sampling
 	if (!strcmp(pname, "MetropolisSampling")) {
-	  if (sscanf(line, "%*50s %d", &MetropolisSampling) != 1) ErrorMsg(2, pname);
-	  if ( (MetropolisSampling < 0) || (MetropolisSampling > 1) ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %d", &ptState.MetropolisSampling) != 1) ErrorMsg(2, pname);
+	  if ( (ptState.MetropolisSampling < 0) || (ptState.MetropolisSampling > 1) ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Initial Temperture used in simple Seq() loop
 	if (!strcmp(pname, "MTi")) {
-	  if (sscanf(line, "%*50s %lg", &MTi) != 1) ErrorMsg(2, pname);
-	  if ( MTi < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MTi) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MTi < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Final Temperture used in simple Seq() loop
 	if (!strcmp(pname, "MTf")) {
-	  if (sscanf(line, "%*50s %lg", &MTf) != 1) ErrorMsg(2, pname);
-	  if ( MTf < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MTf) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MTf < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Temperture Increment used in simple Seq() loop
 	if (!strcmp(pname, "MdT")) {
-	  if (sscanf(line, "%*50s %lg", &MdT) != 1) ErrorMsg(2, pname);
-	  if ( MdT < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MdT) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MdT < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 
 //Number of MC Samples taken in the Seq() function
 	if (!strcmp(pname, "MSAMPS")) {
-	  if (sscanf(line, "%*50s %lg", &MSAMPS) != 1) ErrorMsg(2, pname);
-	  if ( MSAMPS < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MSAMPS) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MSAMPS < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Number of Samples separating data in Seq()
 	if (!strcmp(pname, "MSEP")) {
-	  if (sscanf(line, "%*50s %lg", &MSEP) != 1) ErrorMsg(2, pname);
-	  if ( MSEP < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MSEP) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MSEP < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 	
 //Number of Dropped Samples before each T run
 	if (!strcmp(pname, "MDROP")) {
-	  if (sscanf(line, "%*50s %lg", &MDROP) != 1) ErrorMsg(2, pname);
-	  if ( MDROP < 0 ) ErrorMsg(3, pname);
+	  if (sscanf(line, "%*50s %lg", &ptState.MDROP) != 1) ErrorMsg(2, pname);
+	  if ( ptState.MDROP < 0 ) ErrorMsg(3, pname);
 	  continue;
 	}
 
@@ -191,9 +191,9 @@ void WriteInput()
 
   printf("\n### Program Parameters #################################\n\n");
 
-  //if(MetropolisSampling == 0)	
+  //if(ptState.MetropolisSampling == 0)	
   //{	
-	printf("#  Number of Monomers  %d\n", N);
+	printf("#  Number of Atoms  %d\n", alloyState.N);
 	/*
 	printf("#  Interaction Constant  %g\n", Jkb);
 	printf("#  Number of Energy Bins  %d\n", EBINS);
@@ -211,12 +211,12 @@ void WriteInput()
 	*/
   //};
   /*
-  if(MetropolisSampling == 1)
+  if(ptState.MetropolisSampling == 1)
   {
-	printf("#  Metropolis Sampling  %d\n", MetropolisSampling);
-	printf("#  Initial Temperature  %g\n", MTi);
-	printf("#  Final Temperature  %g\n", MTf);
-	printf("#  Temperature Increment  %g\n", MdT);
+	printf("#  Metropolis Sampling  %d\n", ptState.MetropolisSampling);
+	printf("#  Initial Temperature  %g\n", ptState.MTi);
+	printf("#  Final Temperature  %g\n", ptState.MTf);
+	printf("#  Temperature Increment  %g\n", ptState.MdT);
 	printf("#  Number of Samples in Metropolis  %g\n", SeqSAMPS);
 	printf("#  Number of Samples Separating Taken Data  %g\n", SeqSEP);
 	printf("#  Number of Point Initially Dropped  %g\n", SeqDROP);

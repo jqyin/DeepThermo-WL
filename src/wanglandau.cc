@@ -11,8 +11,6 @@
 #include "alloy.hpp"
 #include "pt.hpp"
 
-extern int myrank, nprocs;
-
 double flatWL(SamplingMode mode)
 {
 	int i,k;
@@ -21,12 +19,12 @@ double flatWL(SamplingMode mode)
 	k=0;  //number of sampled bins, used to calculate average
 	min=1.0e300;  //the minimum sampled bin in the histogram wlH[][]
 	avg=0.0;  //average height of the histogram wlH[][]
-	numbelow_flat=0.0;  //number of bins below the flatness criteria
+	wlState.numbelow_flat=0.0;  //number of bins below the flatness criteria
   
 	//This loop finds the flatness and the number of unsampled bins
-	for(i=0;i<D1BINS;++i){
-		Hi = wlH[i];
-		if(mask[i]==1)
+	for(i=0;i<wlState.D1BINS;++i){
+		Hi = wlState.wlH[i];
+		if(wlState.mask[i]==1)
 		{			
 			//minimum of the histogram
 			if( (Hi<min) )
@@ -45,7 +43,7 @@ double flatWL(SamplingMode mode)
 	if(k==0)
 		avg=1.0;  //This keeps from dividing by zero
   
-	numbelow_flat = 0.0;  
+	wlState.numbelow_flat = 0.0;  
 	//returns the current flatenss of the histogram		
 	return min/avg;
   
@@ -56,8 +54,8 @@ double flatWL(SamplingMode mode)
 void resetWL()
 {
 	int i;
-	for(i=0;i<D1BINS;++i){
-		wlH[i]=0;
+	for(i=0;i<wlState.D1BINS;++i){
+		wlState.wlH[i]=0;
 	}
 }
 
@@ -69,10 +67,10 @@ void readmask(void)
   
   ifp=fopen("mask.dat","r");
   
-  for(k=0;k<D1BINS;++k)
+  for(k=0;k<wlState.D1BINS;++k)
     {
       fscanf(ifp,"%d\t%d\n",&i,&tmp);
-      mask[i]=tmp;
+      wlState.mask[i]=tmp;
     };
 }
 
@@ -84,8 +82,8 @@ void writemask(void)
   
   ofp=fopen("mask.dat","w");
   
-  for(i=0;i<D1BINS;++i)
-      fprintf(ofp,"%g\t%d\n",i/invdWLD1+WLD1min,mask[i]);
+  for(i=0;i<wlState.D1BINS;++i)
+      fprintf(ofp,"%g\t%d\n",i/wlState.invdWLD1+wlState.WLD1min,wlState.mask[i]);
 }
 
 //reads in the g.dat file
@@ -99,11 +97,11 @@ void readg(void)
 	ifp=fopen("g.dat","r");
 	if(ifp != NULL){
 		//Reading in the DOS and histogram from the restart function
-		fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\n",&numf,&ModFactorInit,&TotalSweeps,&IterSweeps, &tmp);
-		printf("restart from: numf %d  lnwlf %g \n", numf, ModFactorInit);
-		for(i=0;i<D1BINS;++i)
+		fscanf(ifp,"#%d\t%lg\t%d\t%d\t%lg\n",&wlState.numf,&wlState.ModFactorInit,&wlState.TotalSweeps,&wlState.IterSweeps, &tmp);
+		printf("restart from: numf %d  lnwlf %g \n", wlState.numf, wlState.ModFactorInit);
+		for(i=0;i<wlState.D1BINS;++i)
     		{
-			fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wllng[i]),&tmp, &tmp );
+			fscanf(ifp,"%lg\t%lg\t%lg\t%lg \n",&tmp,&(wlState.wllng[i]),&tmp, &tmp );
     		};
 		fclose(ifp);
 	}
@@ -120,24 +118,24 @@ void write_DOS_H(void)
 	double ming=1.0e300;
   
 	//uncomment the following line to output in log_10
-	sprintf(s1,"DOS_H_iter%03d.dat",numf);
+	sprintf(s1,"DOS_H_iter%03d.dat",wlState.numf);
 	ofp=fopen(s1,"w");
   
 	//Find the minimum of the DOS
-	for(i=0;i<D1BINS;++i)
+	for(i=0;i<wlState.D1BINS;++i)
 	{
-		if((wllng[i]>maxg) && (mask[i]==1))
-			maxg=wllng[i];
-		if((wllng[i]<ming) && (mask[i]==1))
-			ming=wllng[i];
+		if((wlState.wllng[i]>maxg) && (wlState.mask[i]==1))
+			maxg=wlState.wllng[i];
+		if((wlState.wllng[i]<ming) && (wlState.mask[i]==1))
+			ming=wlState.wllng[i];
 	};
   
 	//Label each iteration with the mod. factor, number of sweeps, and flatness
-	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\n",numf,lnwlf,TotalSweeps,IterSweeps,flatWL(WLdos)); //1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot  );
-	for(i=0;i<D1BINS;++i)
+	fprintf(ofp,"#%d\t%g\t%d\t%d\t%g\n",wlState.numf,wlState.lnwlf,wlState.TotalSweeps,wlState.IterSweeps,flatWL(WLdos)); //1.0*acceptdiff/attemptdiff, 1.0*acceptrot/attemptrot  );
+	for(i=0;i<wlState.D1BINS;++i)
 	{
 		//Printing Out 1D Data
-		fprintf(ofp,"%.8f\t%18.10e\t%18.10e\t%g\n",i/invdWLD1+WLD1min,(wllng[i]-maxg),1.0*wlH[i], 1.0*acceptrot[i]/attemptrot[i]);
+		fprintf(ofp,"%.8f\t%18.10e\t%18.10e\t%g\n",i/wlState.invdWLD1+wlState.WLD1min,(wlState.wllng[i]-maxg),1.0*wlState.wlH[i], 1.0*wlState.acceptrot[i]/wlState.attemptrot[i]);
 	};
   
 	fflush(ofp);
@@ -152,94 +150,88 @@ void initWL(void)
 	double Ei;
 
 
-	TotalSweeps=1;		//Total number of sweeps
-	lnwlf=ModFactorInit;
-  
+	wlState.TotalSweeps=1;		//Total number of sweeps
+	wlState.lnwlf=wlState.ModFactorInit;
 
 	//Primary Binning Direction for WL Simulation
-	D1BINS = (int)((WLD1max - WLD1min)/(dWLD1*invN));
+	wlState.D1BINS = (int)((wlState.WLD1max - wlState.WLD1min)/(wlState.dWLD1*alloyState.invN));
 	//Inverse Bin Width
-	invdWLD1=1.0/(dWLD1*invN);
-	std::cout << "D1BINS: " << D1BINS << std::endl;
+	wlState.invdWLD1=1.0/(wlState.dWLD1*alloyState.invN);
 	//correct the int cut off;
-     	WLD1max = WLD1min +  D1BINS/invdWLD1;   
+     	wlState.WLD1max = wlState.WLD1min +  wlState.D1BINS/wlState.invdWLD1;   
 
-	wlH = (double*)malloc( D1BINS * sizeof(double) );
-	wlHd = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
-	wlHi = (unsigned short*)malloc( D1BINS * sizeof(unsigned short) );
-	wllng = (double*)malloc( D1BINS * sizeof(double ) );
-	wllng_prior = (double*)malloc( D1BINS * sizeof(double ) );
-	wllngd = (double*)malloc( D1BINS * sizeof(double ) );
-	wllngi = (double*)malloc( D1BINS * sizeof(double ) );
-	mask = (int*)malloc( D1BINS * sizeof(int ) );
+	wlState.wlH = (double*)malloc( wlState.D1BINS * sizeof(double) );
+	wlState.wlHd = (unsigned short*)malloc(wlState.D1BINS * sizeof(unsigned short) );
+	wlState.wlHi = (unsigned short*)malloc( wlState.D1BINS * sizeof(unsigned short) );
+	wlState.wllng = (double*)malloc( wlState.D1BINS * sizeof(double ) );
+	wlState.wllng_prior = (double*)malloc( wlState.D1BINS * sizeof(double ) );
+	wlState.wllngd = (double*)malloc( wlState.D1BINS * sizeof(double ) );
+	wlState.wllngi = (double*)malloc( wlState.D1BINS * sizeof(double ) );
+	wlState.mask = (int*)malloc( wlState.D1BINS * sizeof(int ) );
 
-	op = (double*)malloc( D1BINS * sizeof(double ) );
-	op2 = (double*)malloc( D1BINS * sizeof(double ) );
+	alloyState.op = (double*)malloc( wlState.D1BINS * sizeof(double ) );
+	alloyState.op2 = (double*)malloc( wlState.D1BINS * sizeof(double ) );
 
-
-	attemptrot = (int *)malloc(D1BINS*sizeof(int));
-	acceptrot = (int *)malloc(D1BINS*sizeof(int));
+	wlState.attemptrot = (int *)malloc(wlState.D1BINS*sizeof(int));
+	wlState.acceptrot = (int *)malloc(wlState.D1BINS*sizeof(int));
 
 	//Check to see if memory was allocated properly
-	if ( (wlH == NULL) || (wllng == NULL) || (mask == NULL) )
+	if ( (wlState.wlH == NULL) || (wlState.wllng == NULL) || (wlState.mask == NULL) )
     	{
         	fprintf(stderr,"\nFailure to allocate memory for 'Wang-Landau 2D Arrays'.  See 'initWL()'.\n");
        	 	exit(1);
     	};
 
 	//Initialize Arrays
-	for(i=0;i<D1BINS;++i)
+	for(i=0;i<wlState.D1BINS;++i)
 	{
-		wllng[i]=0.0;
-		wllng_prior[i]=0.0;
-		wllngd[i]=0.0;
-		wllngi[i]=0.0;
-		wlH[i]=0;
-		wlHd[i]=0;
-		wlHi[i]=0;
-		mask[i]=1;
-		attemptrot[i]=0;
-		acceptrot[i]=0;
-		op[i] = op2[i]= 0;
+		wlState.wllng[i]=0.0;
+		wlState.wllng_prior[i]=0.0;
+		wlState.wllngd[i]=0.0;
+		wlState.wllngi[i]=0.0;
+		wlState.wlH[i]=0;
+		wlState.wlHd[i]=0;
+		wlState.wlHi[i]=0;
+		wlState.mask[i]=1;
+		wlState.attemptrot[i]=0;
+		wlState.acceptrot[i]=0;
+		alloyState.op[i] = alloyState.op2[i]= 0;
 
 	};
 	for(i = 0 ; i<1000;i++)
-		list[i] = false;
+		wlState.list[i] = false;
 
 	//Run the standard MC routine until the configuration has energy within the WL simulation energy range
-	pT=100;
-	while( (currEtot*invN> WLD1max)  )   // || (currEtot*invN<WLD1min) )
+	ptState.pT=100;
+	while( (alloyState.currEtot*alloyState.invN> wlState.WLD1max)  )   // || (currEtot*invN<WLD1min) )
     	{
 		mchybrid(metropolis);
-		fprintf(stderr,"rank%d Relaxing:  %g of %g \n", myrank, currEtot*invN,WLD1max);
+		fprintf(stderr,"rank%d Relaxing:  %g of %g \n", mpiState.myrank, alloyState.currEtot*alloyState.invN,wlState.WLD1max);
     	};
 
-	if(currEtot*invN<WLD1min){ // extend ground energy;
-		fprintf(stderr,"currEtot/N: %g  \n",currEtot*invN);
+	if(alloyState.currEtot*alloyState.invN<wlState.WLD1min){ // extend ground energy;
+		fprintf(stderr,"currEtot/N: %g  \n",alloyState.currEtot*alloyState.invN);
 	};
-	LOWESTE = 0; 
+	wlState.LOWESTE = 0; 
 	
-        E_0 = int(0.2*D1BINS);
+        alloyState.E_0 = int(0.2*wlState.D1BINS);
 	//checkpoint
 	readg();
-	E_0 = E_0 - int((numf-1)*0.01*D1BINS);
+	alloyState.E_0 = alloyState.E_0 - int((wlState.numf-1)*0.01*wlState.D1BINS);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 void freeWL(){
-	int i;
-	free(wlH);
-	free(wllng);
-	free(wllng_prior);
-	free(wlHi);
-	free(wllngi);
-	free(wlHd);
-	free(wllngd);
-	free(mask);
-	free(attemptrot);
-	free(acceptrot);
-
-
+	free(wlState.wlH);
+	free(wlState.wllng);
+	free(wlState.wllng_prior);
+	free(wlState.wlHi);
+	free(wlState.wllngi);
+	free(wlState.wlHd);
+	free(wlState.wllngd);
+	free(wlState.mask);
+	free(wlState.attemptrot);
+	free(wlState.acceptrot);
 
 }
 //attempts to run one WL hybrid move per bin
@@ -248,7 +240,6 @@ void sweepWL(int nsweeps, SamplingMode mode)
 	for(int i=0;i<nsweeps;++i)
    	{
 		BondSwap(mode);
-		
 	}
 }
 
@@ -261,60 +252,53 @@ void global_update(int nsweeps, double Flat){
 	double ming=1.0e300;
 	FILE * fp, *fp_time;
 	std::chrono::high_resolution_clock::time_point start,end;
- 	if(numf == 2 && myrank == 0){
+ 	if(wlState.numf == 2 && mpiState.myrank == 0){
 		fp_time = fopen("infer.dat", "w");	
 	}
 	while(tmp_flat <= Flat)
 	{		
 		sweepWL(nsweeps, WLprior);
-		if(numf == 2)
+		if(wlState.numf == 2)
 			start = std::chrono::high_resolution_clock::now();
 		vae_update(WLprior);
-		if(numf == 2){
+		if(wlState.numf == 2){
 			end = std::chrono::high_resolution_clock::now();	
 			std::chrono::duration<double, std::milli> ms_double = end - start;
 			duration += ms_double.count(); 
 			cnt++;
 		}
 		
-		IterSweeps+=1;
-		TotalSweeps+=1; 
-		if( (TotalSweeps % 1) == 0)
+		wlState.IterSweeps+=1;
+		wlState.TotalSweeps+=1; 
+		if( (wlState.TotalSweeps % 1) == 0)
 		{
 			//MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-			MPI_Allreduce(wlHi, wlHd, D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
-			for(i=0;i<D1BINS;i++){
-				wlH[i] += wlHd[i];
-				wllng_prior[i] += wlHd[i]*lnwlf;    //wllngd[i];
+			MPI_Allreduce(wlState.wlHi, wlState.wlHd, wlState.D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);
+			for(i=0;i<wlState.D1BINS;i++){
+				wlState.wlH[i] += wlState.wlHd[i];
+				wlState.wllng_prior[i] += wlState.wlHd[i]*wlState.lnwlf;    //wllngd[i];
 			}	
-			memset(wllngi, 0, D1BINS*sizeof(double));
-			memset(wlHi, 0, D1BINS*sizeof(unsigned short));
+			memset(wlState.wllngi, 0, wlState.D1BINS*sizeof(double));
+			memset(wlState.wlHi, 0, wlState.D1BINS*sizeof(unsigned short));
 			tmp_flat=flatWL(WLprior);
-			if( (IterSweeps %100)==0 &&  myrank == 0)
+			if( (wlState.IterSweeps %100)==0 &&  mpiState.myrank == 0)
 				write_DOS_H();
 		}
 	}
- 	if(numf == 2 && myrank == 0){
+ 	if(wlState.numf == 2 && mpiState.myrank == 0){
 		fprintf(fp_time, "infers/ms: %f\n", 2.0*cnt/duration);
 		fflush(fp_time);	
 	}
 
-	for(i=0;i<D1BINS;++i)
-	{
-		if((wllng_prior[i]>maxg) && (mask[i]==1))
-			maxg=wllng_prior[i];
-		if((wllng[i]<ming) && (mask[i]==1))
-			ming=wllng[i];
-	}
-	if(myrank == 0)
+	if(mpiState.myrank == 0)
 		fp = fopen("global-update-prior.dat", "w");
-	for(i=0;i<D1BINS;++i){
-                wllng_prior[i] = wllng_prior[i]*lnwlf;
-		wllng[i] += wllng_prior[i];	
-		if(myrank == 0)
-			fprintf(fp,"%g\t%18.10e\n",i/invdWLD1+WLD1min, wllng_prior[i]);
+	for(i=0;i<wlState.D1BINS;++i){
+                wlState.wllng_prior[i] = wlState.wllng_prior[i]*wlState.lnwlf;
+		wlState.wllng[i] += wlState.wllng_prior[i];	
+		if(mpiState.myrank == 0)
+			fprintf(fp,"%g\t%18.10e\n",i/wlState.invdWLD1+wlState.WLD1min, wlState.wllng_prior[i]);
 	}
-	if(myrank == 0)
+	if(mpiState.myrank == 0)
 		fclose(fp);
         
 	resetWL();
@@ -331,25 +315,25 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 	double R;
 
 	//Primary direction index
-	iti=(int) ((Ei*invN-WLD1min)*invdWLD1);
-	fti=(int) ((Ef*invN-WLD1min)*invdWLD1);
+	iti=(int) ((Ei*alloyState.invN-wlState.WLD1min)*wlState.invdWLD1);
+	fti=(int) ((Ef*alloyState.invN-wlState.WLD1min)*wlState.invdWLD1);
 
 	//This statement simply prints out the lowest 20 energy configurations;
-	if(fti < LOWESTE+10 && fti >= LOWESTE)
+	if(fti < wlState.LOWESTE+10 && fti >= wlState.LOWESTE)
 	{	
-		if(! list[fti - LOWESTE]){
+		if(! wlState.list[fti - wlState.LOWESTE]){
 			//write_xyz(fti - LOWESTE);
-			list[fti - LOWESTE] = true;
+			wlState.list[fti - wlState.LOWESTE] = true;
 		}
 	};
 
-	attemptrot[iti] += 1;
-    	assert ( iti>=0 && iti < D1BINS);   
+	wlState.attemptrot[iti] += 1;
+    	assert ( iti>=0 && iti < wlState.D1BINS);   
 
-	if((fti<0)||(fti>=D1BINS)||(mask[fti]==0))
+	if((fti<0)||(fti>=wlState.D1BINS)||(wlState.mask[fti]==0))
     	{
-			wlHi[iti]+=1;
-			wllngi[iti]+= lnwlf;	
+			wlState.wlHi[iti]+=1;
+			wlState.wllngi[iti]+= wlState.lnwlf;	
 
 			return 0;
     	}
@@ -357,25 +341,25 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
     	{
 		//inside of bounds
 		if(mode == WLdos || mode == WLproduction){
-			lngi=wllngi[iti] + wllng[iti];
-			lngf=wllngi[fti] + wllng[fti];
+			lngi=wlState.wllngi[iti] + wlState.wllng[iti];
+			lngf=wlState.wllngi[fti] + wlState.wllng[fti];
 		}
 		else if(mode == WLprior){//prior
-			lngi=wllngi[iti] + wllng[iti] + wllng_prior[iti];
-			lngf=wllngi[fti] + wllng[fti] + wllng_prior[fti];
+			lngi=wlState.wllngi[iti] + wlState.wllng[iti] + wlState.wllng_prior[iti];
+			lngf=wlState.wllngi[fti] + wlState.wllng[fti] + wlState.wllng_prior[fti];
 		}
       		R=exp(lngi-lngf);
 		if(randd1()<R)
 		{
 			//accept
 			if(mode == WLprior || mode == WLdos){
-				acceptrot[iti] += 1;
-	    			wlHi[fti]+=1;
-				wllngi[fti]+= lnwlf;
+				wlState.acceptrot[iti] += 1;
+	    			wlState.wlHi[fti]+=1;
+				wlState.wllngi[fti]+= wlState.lnwlf;
 			}else if(mode == WLproduction){
 				OrderParameter(fti);
-	    			wlHi[fti]+=1;
-				wllngi[fti]+= lnwlf;	
+	    			wlState.wlHi[fti]+=1;
+				wlState.wllngi[fti]+= wlState.lnwlf;	
 			}	
 			return 1;
 		}
@@ -383,12 +367,12 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) //, double Enbi, double 
 		{
 			//reject
 			if(mode == WLprior || mode == WLdos){
-				wlHi[iti]+=1;
-				wllngi[iti]+= lnwlf;
+				wlState.wlHi[iti]+=1;
+				wlState.wllngi[iti]+= wlState.lnwlf;
 			}else if(mode == WLproduction){
 				OrderParameter(iti);
-				wlHi[iti]+=1;
-				wllngi[iti]+= lnwlf;	
+				wlState.wlHi[iti]+=1;
+				wlState.wllngi[iti]+= wlState.lnwlf;	
 			}	
 			return 0;
 		};
