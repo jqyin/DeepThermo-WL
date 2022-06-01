@@ -1,0 +1,34 @@
+#!/bin/bash -l
+#SBATCH -J deepbench
+#SBATCH -N 1
+#SBATCH -t 60
+#SBATCH -A stf016
+#SBATCH --exclusive 
+#SBATCH -o deepbench.o%j
+
+# env
+module load rocm 
+export CPATH=$ROCM_PATH/miopen/include:$CPATH
+export LIBRARY_PATH=$ROCM_PATH/miopen/lib:$LIBRARY_PATH
+export CPATH=$ROCM_PATH/rocblas/include:$CPATH
+export LIBRARY_PATH=$ROCM_PATH/rocblas/lib:$LIBRARY_PATH
+
+
+export MIOPEN_ENABLE_LOGGING=1
+export MIOPEN_ENABLE_LOGGING_CMD=1
+export MIOPEN_LOG_LEVEL=6
+
+BENCH_ROOT=./src/bin
+CONV_BENCH=$BENCH_ROOT/conv_bench
+
+# build
+if [ ! -f  $CONV_BENCH ]; then
+    pushd ./src
+    make 
+    popd
+fi
+
+HOME=/tmp srun -n 1 --gpus-per-node=1 $CONV_BENCH  > log.fp32
+
+
+
