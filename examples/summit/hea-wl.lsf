@@ -15,7 +15,7 @@ export OMP_NUM_THREADS=4
 
 NODES=$(cat ${LSB_DJOB_HOSTFILE} | sort | uniq | grep -v login | grep -v batch | wc -l)
 for g in $(seq 1 6); do
-    jsrun -n${NODES} -a1 -c2 -g1 -r1 redis-server --port $((6780+g)) --logfile /tmp/log.$g  --loadmodule /gpfs/alpine/scratch/junqi/stf011/smartsim/smartsim/smartsim/lib/redisai.so &
+    jsrun -n${NODES} -a1 -c2 -g1 -r1 redis-server --port $((6780+g)) --logfile /tmp/log.$g  --loadmodule ${REDIS_DIR}/lib/redisai.so &
 done
 sleep 10
 

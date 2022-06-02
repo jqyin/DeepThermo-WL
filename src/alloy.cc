@@ -438,10 +438,10 @@ void vae_update(SamplingMode mode){
         memcpy(Wo, alloyState.W, sizeof(int)*NE*NE*SH);
 	// encode the current config to latent space;
 	encode(z);
-        if(mpiState.myrank == 0 && wlState.TotalSweeps%100 == 0){
+        /*if(mpiState.myrank == 0 && wlState.TotalSweeps%100 == 0){
 		printf("step %d before: z=(%f,%f,%f), E=%f\n", wlState.TotalSweeps, z[0], z[1], z[2], alloyState.currEtot);
 		//write_xyz(TotalSweeps);
-	}
+	}*/
 	// random walk in latent space; 
 	walk(z);
 	// decode the data point to real space; 
@@ -449,10 +449,10 @@ void vae_update(SamplingMode mode){
 	// measure the energy of new configuration;
 	E1 = alloyState.currEtot;
 	E2 = Etot(); 
-        if(mpiState.myrank == 0 && wlState.TotalSweeps%100==0){
+        /*if(mpiState.myrank == 0 && wlState.TotalSweeps%100==0){
 		printf("step %d after: z=(%f,%f,%f), E=%f\n", wlState.TotalSweeps, z[0], z[1], z[2], E2);
 		//write_xyz(TotalSweeps+1);
-	}
+	}*/
 	// update according to WL 	
 	deltaE = E2 - E1;
         alloyState.attd++;

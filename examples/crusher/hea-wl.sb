@@ -8,7 +8,7 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH -o hea.o%j
 
-module load rocm
+module load rocm/4.5.0
 
 NUM_RANKS=`expr ${SLURM_NNODES} \* ${SLURM_NTASKS_PER_NODE}`
 NUM_RANKS_PER_NODE=${SLURM_NTASKS_PER_NODE}

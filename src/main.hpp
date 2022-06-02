@@ -110,9 +110,9 @@ struct AlloyState{
 
 
 
-MPIState mpiState; 
-PTState ptState; 
-WLState wlState; 
-AlloyState alloyState; 
+extern MPIState mpiState; 
+extern PTState ptState; 
+extern WLState wlState; 
+extern AlloyState alloyState; 
 
 #endif

@@ -1,7 +1,7 @@
 CC = CC
-TF_DIR = /ccs/proj/stf016/junqi/frontier/miniconda/tf_env
-Flag = -O2 -g -Wno-narrowing -rdynamic -isystem ${TF_DIR}/lib/python3.8/site-packages/tensorflow/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=c++11
-LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR}/lib/python3.8/site-packages/tensorflow -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/lib/python3.8/site-packages/tensorflow/libtensorflow_framework.so
+TF_DIR = /ccs/proj/stf016/junqi/frontier/miniconda/tf_env/lib/python3.8/site-packages/tensorflow
+Flag = -O2 -g -Wno-narrowing -rdynamic -isystem ${TF_DIR}/include  -D_GLIBCXX_USE_CXX11_ABI=1   -std=c++11
+LDFlag =  -g -D_GLIBCXX_USE_CXX11_ABI=1 -rdynamic  -Wl,-rpath,${TF_DIR} -Wl,--allow-multiple-definition -Wl,--whole-archive ${TF_DIR}/libtensorflow_cc.so -Wl,--no-whole-archive ${TF_DIR}/libtensorflow_framework.so
 
 Machine_Flag ?= -DCRUSHER
 WL_Flag ?= -DGLOBAL_UPDATE

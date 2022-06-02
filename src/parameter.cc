@@ -30,7 +30,7 @@ void ReadInput(const char* filename)
 
       if (sscanf(line, "%50s", pname) == 1) {
 
-//Number of Monomers in a Single Chain
+//Number of Atoms
 	if (!strcmp(pname, "N")) {
 	  if (sscanf(line, "%*50s %d", &alloyState.N) != 1) ErrorMsg(2, pname);
 	  if (alloyState.N < 1) ErrorMsg(3, pname);

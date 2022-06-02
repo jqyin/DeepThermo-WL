@@ -16,6 +16,12 @@
 #include "client.hpp"
 #endif
 
+MPIState mpiState;
+PTState ptState;
+WLState wlState;
+AlloyState alloyState;
+
+
 int main(int argc, char *argv[])
 {
  
@@ -42,8 +48,8 @@ int main(int argc, char *argv[])
         //start tensorflow session;
         SessionOptions options;
         options.config.mutable_gpu_options()->set_visible_device_list(std::to_string(mpiState.myrank%GPUperNode));
-        model[0].LoadModel(model_dir+"/encoder", options);
-        model[1].LoadModel(model_dir+"/decoder", options);
+        alloyState.model[0].LoadModel(model_dir+"/encoder", options);
+        alloyState.model[1].LoadModel(model_dir+"/decoder", options);
 #else
 	LoadClientModel(model_dir);	
 #endif
