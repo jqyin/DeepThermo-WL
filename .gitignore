@@ -1,0 +1,34 @@
+# Build artefacts
+build/
+build-*/
+*.o
+*.a
+compile_commands.json
+hea-wl
+hea-wl-relax
+hea-wl-hist
+
+# Run outputs
+run.dat
+comm.dat
+therm.dat
+infer.dat
+global-update-prior.dat
+DOS_H_iter*.dat
+mc*.input
+state*.input
+stat*.dat
+misc*.dat
+mask.dat
+g.dat
+compos.dat
+snap_*.xyz
+logs.o*
+hea.o*
+*.pyc
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+.cache/
