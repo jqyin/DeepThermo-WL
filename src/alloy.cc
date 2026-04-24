@@ -1,628 +1,651 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <assert.h>
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <set>
+#include <string>
+#include <vector>
 
-#define  DEFINE_GLOBALS
-#include "model.hpp"
 #include "alloy.hpp"
-#include "rand.hpp"
 #include "pt.hpp"
+#include "rand.hpp"
 #include "wanglandau.hpp"
 
-#ifndef TF_BACKEND
+#ifdef TF_BACKEND
+#include "model.hpp"
+#else
 #include "client.hpp"
 #endif
 
+// TF_BACKEND path still declares these in model.hpp; SmartRedis path
+// declares them in client.hpp. Task 4 folds both behind an InferenceBackend
+// interface and kills the #ifdef.
 extern std::string encoder_name, decoder_name;
 
-void initialize(){
-	alloyState.attd=alloyState.accd=0;
+namespace {
+constexpr double kEscaleMeV = 13605.69301;
+constexpr double kTscaleMeV = 0.08618;
+}  // namespace
 
-	ini_coupling();
-	alloyState.invN=1.0/(alloyState.N*alloyState.N*alloyState.N);
-		
-	alloyState.SHIFT = alloyState.N-1; 
-	alloyState.VAE_D = 2*(alloyState.N-1)+ alloyState.SHIFT + 1; 
-	alloyState.PAD = int((ceil(1.0*alloyState.VAE_D/16)*16 - alloyState.VAE_D)/2);
-        alloyState.VAE_D += alloyState.PAD*2; 
-	
-	alloyState.inputConfig = (float*) malloc(sizeof(float)*alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE);
-	memset(alloyState.inputConfig,0,sizeof(float)*alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE);
+// Re-use these rather than peppering ::deepthermo_sim.constants accesses;
+// the values are effectively physical constants.
+
+void initialize() {
+    alloyState.attd = alloyState.accd = 0;
+
+    ini_coupling();
+    alloyState.invN = 1.0 / (1.0 * alloyState.N * alloyState.N * alloyState.N);
+
+    alloyState.SHIFT = alloyState.N - 1;
+    alloyState.VAE_D = 2 * (alloyState.N - 1) + alloyState.SHIFT + 1;
+    alloyState.PAD = static_cast<int>((std::ceil(1.0 * alloyState.VAE_D / 16) * 16 - alloyState.VAE_D) / 2);
+    alloyState.VAE_D += alloyState.PAD * 2;
+
+    const std::size_t vae_voxels =
+        static_cast<std::size_t>(alloyState.VAE_D) * alloyState.VAE_D * alloyState.VAE_D * alloyState.NE;
+    alloyState.inputConfig.assign(vae_voxels, 0.0f);
 }
 
-void ini_coupling(){
+void ini_coupling() {
+    const int NE = alloyState.NE;
+    const int SH = alloyState.SH;
+    const int n_pairs = NE * (NE - 1) / 2 + NE;
 
-        int i,j,k,t,ii,cnt,shell,ti[NE*(NE-1)/2 + NE], tj[NE*(NE-1)/2 + NE],x,y,z;
-        double r, Jr[NE*(NE-1)/2 + NE],Jrold;
-        FILE* fop;
+    alloyState.resize_pair_arrays();
 
-        for(i=0; i<NE; i++)
-                for(j=0; j<NE; j++)
-                        for(k=0; k<SH; k++)
-                                alloyState.J[i][j][k] = 0.0;
+    FILE* fop = std::fopen("coupling.input", "r");
+    if (fop == nullptr) {
+        std::printf("coupling.input file was not opened\n");
+        std::exit(1);
+    }
 
-// read from input file;
-        fop = fopen("coupling.input","r");
-        if(fop==NULL){
-                printf("coupling.input file was not opened\n");
-                exit(1);
+    std::vector<int> ti(n_pairs), tj(n_pairs);
+    std::vector<double> Jr(n_pairs);
+    double r = 0.0;
+    double Jrold = 0.0;
+    int shell = 0;
+    alloyState.Nneighbors = 0;
+
+    while (shell < SH) {
+        std::fscanf(fop, "%lg", &r);
+        for (int i = 0; i < n_pairs; ++i) {
+            std::fscanf(fop, "%lg %d %d", &Jr[i], &ti[i], &tj[i]);
         }
+        int x = 0, y = 0, z = 0;
+        std::fscanf(fop, "%d %d %d\n", &x, &y, &z);
 
-        shell = 0; alloyState.Nneighbors=0;
-        for(i=0;i<SH;i++){
-                alloyState.NS[i] = 0;
-                alloyState.Dist[i] = 0.0;
+        if (alloyState.Nneighbors == 0) {
+            Jrold = Jr[0];
+        } else {
+            if (std::fabs(r - alloyState.Dist[shell]) > 1e-6) {
+                shell++;
+                Jrold = Jr[0];
+                if (shell == SH) break;
+            }
         }
-        while( shell < SH)
-        {
-                fscanf(fop, "%lg", &r);
-                for(i=0;i<(NE*(NE-1)/2 + NE);i++){
-                        fscanf(fop, "%lg %d %d", &Jr[i], &ti[i], &tj[i]);
-                }
-                fscanf(fop, "%d %d %d\n", &x, &y, &z);
-                if(alloyState.Nneighbors == 0){
-                        Jrold = Jr[0];
-                }else{
-                        // shell by distance
-                        if(fabs(r- alloyState.Dist[shell]) > 1e-6){
-                                shell++;
-                                Jrold = Jr[0];
-                                if(shell == SH) break;
+        deepthermo::Neighbor nb{x, y, z};
+        alloyState.nlist.push_back(nb);
+        for (int i = 0; i < n_pairs; ++i) {
+            alloyState.J_at(ti[i] - 1, tj[i] - 1, shell) = Jr[i];
+            alloyState.J_at(tj[i] - 1, ti[i] - 1, shell) = Jr[i];
+        }
+        alloyState.Dist[shell] = r;
+        alloyState.NS[shell]++;
+        alloyState.Nneighbors++;
+    }
+
+    std::fclose(fop);
+
+    if (mpiState.myrank == 0) {
+        for (int i = 0; i < SH; ++i) {
+            std::fprintf(stderr, "%d\t%d\t%lf\t%lf\n",
+                         i, alloyState.NS[i], alloyState.Dist[i], alloyState.J_at(0, 1, i));
+        }
+    }
+
+    alloyState.inputPos.assign(alloyState.N_3, std::vector<int>(alloyState.Nneighbors, 0));
+    for (int t = 0; t < NE; ++t) {
+        alloyState.elist[t].assign(alloyState.N_3, 0);
+    }
+}
+
+static void shuffle(int* array, std::size_t n) {
+    for (std::size_t i = n - 1; i > 0; --i) {
+        std::size_t j = std::rand() % (i + 1);
+        int t = array[j];
+        array[j] = array[i];
+        array[i] = t;
+    }
+}
+
+void ini_W() {
+    const int NE = alloyState.NE;
+    const int SH = alloyState.SH;
+    std::fill(alloyState.W.begin(), alloyState.W.end(), 0);
+
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                const int idx = i * alloyState.N_2 + j * alloyState.N + k;
+                const int ai = alloyState.Atom[idx];
+                int cnt = 0;
+                for (int shell = 0; shell < SH; ++shell) {
+                    for (int ii = 0; ii < alloyState.NS[shell]; ++ii) {
+                        const int aj = alloyState.Atom[alloyState.inputPos[idx][cnt++]];
+                        if (ai <= aj) {
+                            alloyState.W_at(ai, aj, shell)++;
+                        } else {
+                            alloyState.W_at(aj, ai, shell)++;
                         }
+                    }
                 }
-                alloyState.nlist[alloyState.Nneighbors].x = x;
-                alloyState.nlist[alloyState.Nneighbors].y = y;
-                alloyState.nlist[alloyState.Nneighbors].z = z;
-                for(i=0;i<(NE*(NE-1)/2 + NE);i++)
-                        alloyState.J[ti[i]-1][tj[i]-1][shell]=alloyState.J[tj[i]-1][ti[i]-1][shell]= Jr[i];
-                alloyState.Dist[shell] = r;
-                alloyState.NS[shell]++; // number of neighbors within each shell
-                alloyState.Nneighbors++; // total number of neighbors
+                (void)NE;  // suppressed: used only for accessor indexing
+            }
         }
-
-        fclose(fop);
-
-        if(mpiState.myrank==0){
-                for(i=0;i<SH;i++)
-                        fprintf(stderr,"%d\t%d\t%lf\t%lf\n",i,alloyState.NS[i],alloyState.Dist[i],alloyState.J[0][1][i]);
-        }
-        alloyState.inputPos = (int**)malloc(sizeof(int*)*alloyState.N_3);
-        for(i=0; i<alloyState.N_3; i++){
-                alloyState.inputPos[i] = (int*)malloc(sizeof(int)*alloyState.Nneighbors);
-        }
-	for(t=0;t<NE;t++)
-		alloyState.elist[t] = (int*)malloc(sizeof(int)*alloyState.N_3);
+    }
 }
 
-void shuffle(int *array, size_t n)
-{
-        size_t i;
-        for (i = n-1; i > 0; i--) 
-        {
-          size_t j = rand() % (i+1);
-          int t = array[j];
-          array[j] = array[i];
-          array[i] = t;
-        }
-}
+void ini_apos() {
+    const int SH = alloyState.SH;
+    std::vector<int> nn(alloyState.max_neighbors * 3);
 
-void ini_W(){
-        int i, j, k, idx, cnt, shell, ii, ai, aj;
-        double Wsum = 0.0;
-        memset(alloyState.W, 0, sizeof(int)*NE*NE*SH);
-        // init W matrix
-        for(i=0; i<alloyState.N; i++)for(j=0; j<alloyState.N; j++)for(k=0; k<alloyState.N; k++){
-                idx = i*alloyState.N_2+j*alloyState.N+k;
-                ai = alloyState.Atom[idx];
-                cnt = 0;
-                for(shell =0; shell < SH; shell++){
-                        for(ii=0;ii<alloyState.NS[shell];ii++){
-                                aj = alloyState.Atom[alloyState.inputPos[idx][cnt++]];
-                                if(ai <= aj)
-                                        alloyState.W[ai][aj][shell]++;
-                                else
-                                        alloyState.W[aj][ai][shell]++;
-                        }
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                neighbor(i, j, k, nn.data());
+                int cnt = 0, cntt = 0;
+                const int idx = i * alloyState.N_2 + j * alloyState.N + k;
+                for (int shell = 0; shell < SH; ++shell) {
+                    for (int ii = 0; ii < alloyState.NS[shell]; ++ii) {
+                        const int x = nn[cnt++];
+                        const int y = nn[cnt++];
+                        const int z = nn[cnt++];
+                        alloyState.inputPos[idx][cntt++] =
+                            x * alloyState.N_2 + y * alloyState.N + z;
+                    }
                 }
+            }
         }
+    }
+    ini_W();
 }
 
-void ini_apos(){
-	int idx, i, j, k, x, y, z, cnt, ii, shell;
-	int nn[MAX_NEIGHBORS*3], cntt;  
+void ini_alloy(int state) {
+    const int NE = alloyState.NE;
+    const int total = alloyState.N * alloyState.N * alloyState.N;
+    std::vector<int> list(total, 0);
 
-// generate neighbor list for neural network inputs
-	for(i=0; i<alloyState.N; i++)for(j=0; j<alloyState.N; j++)for(k=0; k<alloyState.N; k++){
-		neighbor(i,j,k,nn);
-		cnt = cntt = 0; 
-		idx = i*alloyState.N_2+j*alloyState.N+k;
-		for(shell =0; shell < SH; shell++)
-			for(ii=0;ii<alloyState.NS[shell];ii++){
-				x = nn[cnt++]; y = nn[cnt++]; z = nn[cnt++];
-				alloyState.inputPos[idx][cntt++] = x*alloyState.N_2+y*alloyState.N+z;
-		}			
-	} 
-	ini_W();	
-}
-void ini_alloy(int state){
+    FILE* fop = std::fopen("composition.input", "r");
+    if (fop == nullptr) {
+        std::printf("composition.input file was not opened\n");
+        std::exit(1);
+    }
 
-	int i,j,k,t,t2,Ni,ii,shell,x,y,z;
-	int cnt,cnti,cntt[NE];
-	double p;
-	int * list = (int*) malloc(sizeof(int)*alloyState.N*alloyState.N*alloyState.N);
-// initialize alloy atom species with equal probabilities.
-	FILE* fop = fopen("composition.input","r");
-        if(fop==NULL){
-		printf("composition.input file was not opened\n");
-		exit(1);
+    int cnt = 0;
+    for (int t = 0; t < NE; ++t) {
+        double p = 0.0;
+        std::fscanf(fop, "%lg", &p);
+        const int Ni = static_cast<int>(total * p);
+        int cnti = 0;
+        while (cnti < Ni) {
+            list[cnt++] = t;
+            cnti++;
         }
-	cnt = 0;
-	for(t=0;t<NE;t++){
-		fscanf(fop, "%lg", &p); 
-		Ni = (int)(alloyState.N*alloyState.N*alloyState.N*p);
-		cnti=0;
-		while(cnti < Ni){
-			list[cnt++] = t;
-			cnti++;
-		}
-		alloyState.NT[t] = 0;
-	}
-	while(cnt < alloyState.N*alloyState.N*alloyState.N){
-		t = (int)(randd1()*NE);
-		list[cnt++] = t;
-	}
-        if(state == 0)
-		shuffle(list, alloyState.N*alloyState.N*alloyState.N);
-	cnt = 0;	
-	for(i=0; i<alloyState.N; i++)
-		for(j=0; j<alloyState.N; j++)
-			for(k=0; k<alloyState.N; k++){		
-				t = list[cnt++];
-				alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k] = t;
-				alloyState.NT[t]++;
-	}
-	free(list);
-        fclose(fop);
-	for(t = 0 ; t < NE; t++)
-		fprintf(stderr, "%s:%d\n",alloyState.element[t+1],alloyState.NT[t]);
+        alloyState.NT[t] = 0;
+    }
+    while (cnt < total) {
+        const int t = static_cast<int>(randd1() * NE);
+        list[cnt++] = t;
+    }
+    if (state == 0) {
+        shuffle(list.data(), total);
+    }
 
-}
-
-inline void noffset(int i, int j, int k, int offi, int offj, int offk, int*nn, int cnt){
-	int si, sj,sk;
-	si = i + offi;
-	if(si < 0) si += alloyState.N;
-	if(si >= alloyState.N) si -= alloyState.N;
-	sj = j + offj;
-	if(sj < 0) sj += alloyState.N;
-	if(sj >= alloyState.N) sj -= alloyState.N;
-	sk = k + offk;
-	if(sk < 0) sk += alloyState.N;
-	if(sk >= alloyState.N) sk -= alloyState.N;
-	nn[cnt++] = si; nn[cnt++] = sj; nn[cnt++] =sk;
-	
-}
-void  neighbor(int i, int j, int k, int* nn){
-	int ii,cnt=0;
-	for(ii=0;ii<alloyState.Nneighbors;ii++){
-		noffset(i,j,k,alloyState.nlist[ii].x,alloyState.nlist[ii].y,alloyState.nlist[ii].z,nn,cnt);
-		cnt += 3;
-	}
-}
-
-void updateWsite(int ai, int aj, int pi, int pj){
-        int shell, j, id, a;
-        int cnt=0;
-        for(shell = 0; shell < SH; shell++){
-                for(j=0; j<alloyState.NS[shell]; j++){
-                        id = alloyState.inputPos[pi][cnt++];
-                        if(id != pj){
-                                a = alloyState.Atom[id];
-                                if(ai <= a)
-                                        alloyState.W[ai][a][shell] -= 2;
-                                else
-                                        alloyState.W[a][ai][shell] -= 2;
-                                if(aj <= a)
-                                        alloyState.W[aj][a][shell] += 2;
-                                else
-                                        alloyState.W[a][aj][shell] += 2;
-                        }
-                }
+    cnt = 0;
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                const int t = list[cnt++];
+                alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] =
+                    static_cast<short>(t);
+                alloyState.NT[t]++;
+            }
         }
+    }
+    std::fclose(fop);
 
+    for (int t = 0; t < NE; ++t) {
+        std::fprintf(stderr, "%s:%d\n",
+                     alloyState.element[t + 1].c_str(), alloyState.NT[t]);
+    }
 }
 
-void updateW(int ai, int aj, int idxi, int idxj){
-        updateWsite(ai, aj, idxi, idxj);
-        updateWsite(aj, ai, idxj, idxi);
+static inline void noffset(int i, int j, int k, int offi, int offj, int offk, int* nn, int cnt) {
+    int si = i + offi;
+    if (si < 0) si += alloyState.N;
+    if (si >= alloyState.N) si -= alloyState.N;
+    int sj = j + offj;
+    if (sj < 0) sj += alloyState.N;
+    if (sj >= alloyState.N) sj -= alloyState.N;
+    int sk = k + offk;
+    if (sk < 0) sk += alloyState.N;
+    if (sk >= alloyState.N) sk -= alloyState.N;
+    nn[cnt++] = si;
+    nn[cnt++] = sj;
+    nn[cnt++] = sk;
 }
 
-
-double Etot(){
-	double E;
-	E = 0.0;
-
-       	for(int shell = 0; shell < SH; shell++){
-                for(int i =0; i < NE-1; i++){
-                        for(int j =i+1; j < NE; j++){
-                                E += (1.0*alloyState.W[i][j][shell]/alloyState.NS[shell]/alloyState.N_3)*alloyState.J[i][j][shell];
-			}
-		}
-	}
-	E += alloyState.reglin_intercept;
-	return E*alloyState.N_3; 
-
+void neighbor(int i, int j, int k, int* nn) {
+    int cnt = 0;
+    for (int ii = 0; ii < alloyState.Nneighbors; ++ii) {
+        noffset(i, j, k,
+                alloyState.nlist[ii].x, alloyState.nlist[ii].y, alloyState.nlist[ii].z,
+                nn, cnt);
+        cnt += 3;
+    }
 }
 
-void BondSwap(SamplingMode mode){
-	int i, j, k, x, y, z, ii, jj, kk, n, it, shell;
-	int ai, aj, cnt, cntE; 
-	int Wo[NE][NE][SH];
-	double deltaE, dE, E1, E2;
-
-        i = (int) (randd1()*alloyState.N_3);
-        n = (int) (randd1()*alloyState.Nneighbors);
-        j = alloyState.inputPos[i][n];
-    	if(alloyState.Atom[i] != alloyState.Atom[j]){
-        	E1 = alloyState.currEtot;
-        	ai = alloyState.Atom[i];
-        	aj = alloyState.Atom[j];
-        	memcpy(Wo, alloyState.W, sizeof(int)*NE*NE*SH);
-        	updateW(ai, aj, i, j);
-        	alloyState.Atom[i] = aj;
-        	alloyState.Atom[j] = ai;
-        	E2 = Etot();
-
-        	deltaE = E2 - E1;
-        	alloyState.attd++;
-		if(mode == metropolis){//metropolis
-        		if(Metropolis(alloyState.currEtot, alloyState.currEtot+deltaE) == 1){// accept
-        			alloyState.currEtot += deltaE; alloyState.accd++;
-        		}else{//reject
-                		alloyState.Atom[i] = ai;
-                		alloyState.Atom[j] = aj;
-                		memcpy(alloyState.W, Wo, sizeof(int)*NE*NE*SH);
-        		}
-		}
-		else{//wanglandau
-        		if(WangLandau(alloyState.currEtot, alloyState.currEtot+deltaE, mode) == 1){// accept
-                		alloyState.currEtot += deltaE; alloyState.accd++;
-        		}else{//reject
-                		alloyState.Atom[i] = ai;
-                		alloyState.Atom[j] = aj;
-                		memcpy(alloyState.W, Wo, sizeof(int)*NE*NE*SH);
-        		}
-
-		}
-    	}
-
+static void updateWsite(int ai, int aj, int pi, int pj) {
+    const int SH = alloyState.SH;
+    int cnt = 0;
+    for (int shell = 0; shell < SH; ++shell) {
+        for (int j = 0; j < alloyState.NS[shell]; ++j) {
+            const int id = alloyState.inputPos[pi][cnt++];
+            if (id != pj) {
+                const int a = alloyState.Atom[id];
+                if (ai <= a) alloyState.W_at(ai, a, shell) -= 2;
+                else         alloyState.W_at(a, ai, shell) -= 2;
+                if (aj <= a) alloyState.W_at(aj, a, shell) += 2;
+                else         alloyState.W_at(a, aj, shell) += 2;
+            }
+        }
+    }
 }
 
-void encode(float* z){
-	int i,j,k,t; 
+static void updateW(int ai, int aj, int idxi, int idxj) {
+    updateWsite(ai, aj, idxi, idxj);
+    updateWsite(aj, ai, idxj, idxi);
+}
+
+double Etot() {
+    const int NE = alloyState.NE;
+    const int SH = alloyState.SH;
+    double E = 0.0;
+    for (int shell = 0; shell < SH; ++shell) {
+        for (int i = 0; i < NE - 1; ++i) {
+            for (int j = i + 1; j < NE; ++j) {
+                E += (1.0 * alloyState.W_at(i, j, shell) /
+                      alloyState.NS[shell] / alloyState.N_3) *
+                     alloyState.J_at(i, j, shell);
+            }
+        }
+    }
+    E += alloyState.reglin_intercept;
+    return E * alloyState.N_3;
+}
+
+void BondSwap(SamplingMode mode) {
+    const int i = static_cast<int>(randd1() * alloyState.N_3);
+    const int n = static_cast<int>(randd1() * alloyState.Nneighbors);
+    const int j = alloyState.inputPos[i][n];
+
+    if (alloyState.Atom[i] == alloyState.Atom[j]) return;
+
+    const double E1 = alloyState.currEtot;
+    const int ai = alloyState.Atom[i];
+    const int aj = alloyState.Atom[j];
+    std::vector<int> Wo = alloyState.W;  // snapshot
+    updateW(ai, aj, i, j);
+    alloyState.Atom[i] = static_cast<short>(aj);
+    alloyState.Atom[j] = static_cast<short>(ai);
+    const double E2 = Etot();
+    const double deltaE = E2 - E1;
+    alloyState.attd++;
+
+    auto revert = [&]() {
+        alloyState.Atom[i] = static_cast<short>(ai);
+        alloyState.Atom[j] = static_cast<short>(aj);
+        alloyState.W = std::move(Wo);
+    };
+
+    if (mode == metropolis) {
+        if (Metropolis(alloyState.currEtot, alloyState.currEtot + deltaE) == 1) {
+            alloyState.currEtot += deltaE;
+            alloyState.accd++;
+        } else {
+            revert();
+        }
+    } else {
+        if (WangLandau(alloyState.currEtot, alloyState.currEtot + deltaE, mode) == 1) {
+            alloyState.currEtot += deltaE;
+            alloyState.accd++;
+        } else {
+            revert();
+        }
+    }
+}
+
+void encode(float* z) {
+    const int NE = alloyState.NE;
+    const int VAE_D = alloyState.VAE_D;
+    const int SHIFT = alloyState.SHIFT;
+    const int PAD = alloyState.PAD;
+
+    auto voxel_index = [&](int i, int j, int k) {
+        return (j - i + k + SHIFT + PAD) * VAE_D * VAE_D * NE +
+               (k - j + i + SHIFT + PAD) * VAE_D * NE +
+               (j + i - k + SHIFT + PAD) * NE;
+    };
+
 #ifdef TF_BACKEND
-	tensorflow::TensorShape data_shape({1, alloyState.VAE_D, alloyState.VAE_D, alloyState.VAE_D, NE});
-        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-        auto data_ = data.flat<float>().data();
-  	for(i=0;i<alloyState.N;i++)for(j=0; j<alloyState.N;j++)for(k=0;k<alloyState.N;k++){
-		int idx = (j-i+k+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*alloyState.VAE_D*NE + (k-j+i+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*NE + (j+i-k+alloyState.SHIFT+alloyState.PAD)*NE;
-		for(t =0; t <NE; t++)
-			if(alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k]==t){
-				data_[idx+t] = 1;
-				break;
-			}else{
-				data_[idx+t] = 0;
-			}
-	}
-	std::vector<tensorflow::Tensor> outputs;
-        alloyState.model[0].Predict(data, outputs, PredictMode::encoder);
-	for(i=0;i<3;i++)
-		z[i] = outputs[0].flat<float>().data()[i];
+    tensorflow::TensorShape data_shape({1, VAE_D, VAE_D, VAE_D, NE});
+    tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+    auto data_ = data.flat<float>().data();
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                const int idx = voxel_index(i, j, k);
+                for (int t = 0; t < NE; ++t) {
+                    if (alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] == t) {
+                        data_[idx + t] = 1;
+                        break;
+                    } else {
+                        data_[idx + t] = 0;
+                    }
+                }
+            }
+        }
+    }
+    std::vector<tensorflow::Tensor> outputs;
+    tf_models[0].Predict(data, outputs, PredictMode::encoder);
+    for (int i = 0; i < 3; ++i) z[i] = outputs[0].flat<float>().data()[i];
 #else
-	std::string z_key, config_key;
-	std::string rankID = std::to_string(mpiState.myrank);
-	memset(alloyState.inputConfig,0,sizeof(float)*alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE);
-  	for(i=0;i<alloyState.N;i++)for(j=0; j<alloyState.N;j++)for(k=0;k<alloyState.N;k++){
-		int idx = (j-i+k+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*alloyState.VAE_D*NE + (k-j+i+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*NE + (j+i-k+alloyState.SHIFT+alloyState.PAD)*NE;
-		for(t =0; t <NE; t++)
-			if(alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k]==t){
-				alloyState.inputConfig[idx+t] = 1;
-				break;
-			}
-	}
-	z_key = "output_z_"+rankID;
-	config_key = "input_config_"+rankID;
-        (*SRclient).put_tensor(config_key, alloyState.inputConfig, {1, alloyState.VAE_D, alloyState.VAE_D, alloyState.VAE_D, NE}, SmartRedis::TensorType::flt,
-                                SmartRedis::MemoryLayout::contiguous);
-	(*SRclient).run_model(encoder_name+rankID, {config_key}, {z_key});
-	(*SRclient).unpack_tensor(z_key, z, {3}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+    std::string rankID = std::to_string(mpiState.myrank);
+    std::fill(alloyState.inputConfig.begin(), alloyState.inputConfig.end(), 0.0f);
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                const int idx = voxel_index(i, j, k);
+                for (int t = 0; t < NE; ++t) {
+                    if (alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] == t) {
+                        alloyState.inputConfig[idx + t] = 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    std::string z_key = "output_z_" + rankID;
+    std::string config_key = "input_config_" + rankID;
+    (*SRclient).put_tensor(config_key, alloyState.inputConfig.data(),
+                           {1, static_cast<std::size_t>(VAE_D),
+                                static_cast<std::size_t>(VAE_D),
+                                static_cast<std::size_t>(VAE_D),
+                                static_cast<std::size_t>(NE)},
+                           SmartRedis::TensorType::flt,
+                           SmartRedis::MemoryLayout::contiguous);
+    (*SRclient).run_model(encoder_name + rankID, {config_key}, {z_key});
+    (*SRclient).unpack_tensor(z_key, z, {3}, SmartRedis::TensorType::flt,
+                              SmartRedis::MemoryLayout::contiguous);
 #endif
 }
 
-void walk(float* npos){
-	// shhere
-	double v1, v2,v3,a;
+void walk(float* npos) {
+    double v1, v2, v3, a;
+    v1 = 2.0 * randd1() - 1.0;
+    v2 = 2.0 * randd1() - 1.0;
+    a = v1 * v1 + v2 * v2;
+    while (a > 1.0) {
+        v1 = 2.0 * randd1() - 1.0;
+        v2 = 2.0 * randd1() - 1.0;
+        a = v1 * v1 + v2 * v2;
+    }
+    v3 = 1 - 2.0 * a;
+    a = std::sqrt(1 - a);
+    v1 = 2.0 * a * v1;
+    v2 = 2.0 * a * v2;
 
-	v1 = (2.0*randd1()-1.0);
-	v2 = (2.0*randd1()-1.0);
-	a = v1*v1 +v2*v2;
-	while(a>1.0){
-		v1 = (2.0*randd1()-1.0);
-		v2 = (2.0*randd1()-1.0);	
-		a = v1*v1+v2*v2;
-	}
-	v3 = 1-2.0*a;
-	a = sqrt(1-a);
-	v1 = 2.0*a*v1;
-	v2 = 2.0*a*v2;
-
-	npos[0] += alloyState.Z_R*v1;
-	npos[1] += alloyState.Z_R*v2;
-	npos[2] += alloyState.Z_R*v3; 
-
+    npos[0] += alloyState.Z_R * v1;
+    npos[1] += alloyState.Z_R * v2;
+    npos[2] += alloyState.Z_R * v3;
 }
 
-int arg_max(std::vector<float> const& vec){
-	return static_cast<int>(std::distance(vec.begin(), std::max_element(vec.begin(), vec.end())));
+static int arg_max(const std::vector<float>& vec) {
+    return static_cast<int>(std::distance(vec.begin(),
+                                          std::max_element(vec.begin(), vec.end())));
 }
 
-void decode(float* z){
-  	int i, j, k, t, tt, id, tid;	
-	int sum[NE] = {0};
-	int sumo[NE] = {0};
-	float output[alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE] = {0};
-	std::vector<float> vec(NE); 	
+void decode(float* z) {
+    const int NE = alloyState.NE;
+    const int VAE_D = alloyState.VAE_D;
+    const int SHIFT = alloyState.SHIFT;
+    const int PAD = alloyState.PAD;
+    const std::size_t voxels =
+        static_cast<std::size_t>(VAE_D) * VAE_D * VAE_D * NE;
+
+    std::vector<int> sum(NE, 0);
+    std::vector<int> sumo(NE, 0);
+    std::vector<float> output(voxels, 0.0f);
+    std::vector<float> vec(NE);
+
+    auto voxel_index = [&](int i, int j, int k) {
+        return (j - i + k + SHIFT + PAD) * VAE_D * VAE_D * NE +
+               (k - j + i + SHIFT + PAD) * VAE_D * NE +
+               (j + i - k + SHIFT + PAD) * NE;
+    };
+
 #ifdef TF_BACKEND
-
-	tensorflow::TensorShape data_shape({1, 3});
-        tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-        auto data_ = data.flat<float>().data();
-	for(i=0;i<3;i++)
-		data_[i] = z[i];
-	std::vector<tensorflow::Tensor> outputs;
-        alloyState.model[1].Predict(data, outputs, PredictMode::decoder);
-	memcpy(output, outputs[0].flat<float>().data(), sizeof(float)*alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE);
+    tensorflow::TensorShape data_shape({1, 3});
+    tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
+    auto data_ = data.flat<float>().data();
+    for (int i = 0; i < 3; ++i) data_[i] = z[i];
+    std::vector<tensorflow::Tensor> outputs;
+    tf_models[1].Predict(data, outputs, PredictMode::decoder);
+    std::memcpy(output.data(), outputs[0].flat<float>().data(), sizeof(float) * voxels);
 #else
-	std::string z_key, config_key;
-	std::string rankID = std::to_string(mpiState.myrank);
-	
-	z_key = "input_z_"+rankID;
-	config_key = "output_config_"+rankID;
-        (*SRclient).put_tensor(z_key, z, {1,3}, SmartRedis::TensorType::flt,
-                                SmartRedis::MemoryLayout::contiguous);
-	(*SRclient).run_model(decoder_name+rankID, {z_key}, {config_key});
-	(*SRclient).unpack_tensor(config_key, &output, {alloyState.VAE_D*alloyState.VAE_D*alloyState.VAE_D*NE}, SmartRedis::TensorType::flt,SmartRedis::MemoryLayout::contiguous);
+    std::string rankID = std::to_string(mpiState.myrank);
+    std::string z_key = "input_z_" + rankID;
+    std::string config_key = "output_config_" + rankID;
+    (*SRclient).put_tensor(z_key, z, {1, 3}, SmartRedis::TensorType::flt,
+                           SmartRedis::MemoryLayout::contiguous);
+    (*SRclient).run_model(decoder_name + rankID, {z_key}, {config_key});
+    (*SRclient).unpack_tensor(config_key, output.data(), {voxels},
+                              SmartRedis::TensorType::flt,
+                              SmartRedis::MemoryLayout::contiguous);
 #endif
-	for(t=0;t<NE;t++)
-		memset(alloyState.elist[t],-1,sizeof(int)*alloyState.N_3);
-  	for(i=0;i<alloyState.N;i++)for(j=0; j<alloyState.N;j++)for(k=0;k<alloyState.N;k++){
-		int idx = (j-i+k+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*alloyState.VAE_D*NE + (k-j+i+alloyState.SHIFT+alloyState.PAD)*alloyState.VAE_D*NE + (j+i-k+alloyState.SHIFT+alloyState.PAD)*NE;
-		for(t=0; t<NE; t++)
-			vec[t] = output[idx+t];
-		t = arg_max(vec);
-        	alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k] = t;
-		alloyState.elist[t][sum[t]++] = i*alloyState.N_2+j*alloyState.N+k;
-	}
-	for(t=0;t<NE;t++)
-		sumo[t] = sum[t];
-	// fix concentration, better to take prob into account 
-	for(t=0;t<NE;t++){
-		while(sum[t] > alloyState.NT[t]){
-			id = int(randd1()*sumo[t]);
-			if(alloyState.elist[t][id] != -1){
-				for(tt=0;tt<NE;tt++)
-					if(tt!=t && sum[tt] < alloyState.NT[tt]){
-						tid = tt;
-						break;
-					}
-				alloyState.Atom[alloyState.elist[t][id]] = tid;
-				alloyState.elist[t][id] = -1;
-				sum[t]--;
-				sum[tid]++;
-			} 	
-		}
-	}
-	for(t=0;t<NE;t++)
-		assert(sum[t] == alloyState.NT[t]);
-	ini_W();
 
-}
+    for (int t = 0; t < NE; ++t) {
+        std::fill(alloyState.elist[t].begin(), alloyState.elist[t].end(), -1);
+    }
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                const int idx = voxel_index(i, j, k);
+                for (int t = 0; t < NE; ++t) vec[t] = output[idx + t];
+                const int t = arg_max(vec);
+                alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] =
+                    static_cast<short>(t);
+                alloyState.elist[t][sum[t]++] = i * alloyState.N_2 + j * alloyState.N + k;
+            }
+        }
+    }
+    for (int t = 0; t < NE; ++t) sumo[t] = sum[t];
 
-void vae_update(SamplingMode mode){
-	float z[3] = {0};
-	double E1, E2, deltaE;
-	int Wo[NE][NE][SH];
-        memcpy(alloyState.Atomo, alloyState.Atom, sizeof(short)*alloyState.N_3);
-        memcpy(Wo, alloyState.W, sizeof(int)*NE*NE*SH);
-	// encode the current config to latent space;
-	encode(z);
-        /*if(mpiState.myrank == 0 && wlState.TotalSweeps%100 == 0){
-		printf("step %d before: z=(%f,%f,%f), E=%f\n", wlState.TotalSweeps, z[0], z[1], z[2], alloyState.currEtot);
-		//write_xyz(TotalSweeps);
-	}*/
-	// random walk in latent space; 
-	walk(z);
-	// decode the data point to real space; 
-        decode(z);
-	// measure the energy of new configuration;
-	E1 = alloyState.currEtot;
-	E2 = Etot(); 
-        /*if(mpiState.myrank == 0 && wlState.TotalSweeps%100==0){
-		printf("step %d after: z=(%f,%f,%f), E=%f\n", wlState.TotalSweeps, z[0], z[1], z[2], E2);
-		//write_xyz(TotalSweeps+1);
-	}*/
-	// update according to WL 	
-	deltaE = E2 - E1;
-        alloyState.attd++;
-	if(mode == 0){//metropolis
-        	if(Metropolis(alloyState.currEtot, alloyState.currEtot+deltaE) == 1){// accept
-        		alloyState.currEtot += deltaE; alloyState.accd++;
-        	}else{//reject
-        		memcpy(alloyState.Atom, alloyState.Atomo, sizeof(short)*alloyState.N_3);
-        		memcpy(alloyState.W, Wo, sizeof(int)*NE*NE*SH);
-		}
-	}else{//wanglandau
-        	if(WangLandau(alloyState.currEtot, alloyState.currEtot+deltaE, mode) == 1){// accept
-               		alloyState.currEtot += deltaE; alloyState.accd++;
-        	}else{//reject
-        		memcpy(alloyState.Atom, alloyState.Atomo, sizeof(short)*alloyState.N_3);
-        		memcpy(alloyState.W, Wo, sizeof(int)*NE*NE*SH);
-        	}
-	}
-}
-
-void write_pos(){
-  char s[512];
-  FILE *ofp;
-  ofp=fopen("compos.dat","w");
-	int i,j,k;
-	for(i=0;i<alloyState.N;i++)
-		for(j=0;j<alloyState.N;j++)
-			for(k=0;k<alloyState.N;k++){
-				fprintf(ofp, "%d\t%d\t%d\t%d\t \n",i+k, i+j, j+k,alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k]);
-			}
-  fclose(ofp);
-}
-
-void write_xyz(int frame)
-{
-  int i,j,k,cnt, shell;
-  char s[512];
-  FILE *ofp;
- 
-  sprintf(s,"snap_%d_%d.xyz",frame, mpiState.myrank);
-  ofp=fopen(s,"ab+");
-  fprintf(ofp, "%d\n", alloyState.N_3); 
-  fprintf(ofp,"Eng = %.8lg  MC_step = %d\n", alloyState.currEtot, frame);
-
-  for(shell = 0; shell < SH; shell++)
-        for(i =0; i < NE-1; i++)
-                for(j =i+1; j < NE; j++){
-                        fprintf(ofp, "%.8lg\t",1.0*alloyState.W[i][j][shell]/alloyState.NS[shell]/alloyState.N_3);
+    // Fix concentration drift from VAE decoding (paper Algo.1 line 9: "conservation check").
+    for (int t = 0; t < NE; ++t) {
+        while (sum[t] > alloyState.NT[t]) {
+            const int id = static_cast<int>(randd1() * sumo[t]);
+            if (alloyState.elist[t][id] != -1) {
+                int tid = -1;
+                for (int tt = 0; tt < NE; ++tt) {
+                    if (tt != t && sum[tt] < alloyState.NT[tt]) {
+                        tid = tt;
+                        break;
+                    }
                 }
-  fprintf(ofp, "\n");
-
-
-  for(i=0;i<alloyState.N;i++)
-          for(j=0; j<alloyState.N;j++)
-                  for(k=0;k<alloyState.N;k++)
-                        fprintf(ofp,"%s %d %d %d \n",alloyState.element[alloyState.Atom[i*alloyState.N_2+j*alloyState.N+k]+1], j-i+k, k-j+i, j+i-k);
-  fclose(ofp);
-
+                alloyState.Atom[alloyState.elist[t][id]] = static_cast<short>(tid);
+                alloyState.elist[t][id] = -1;
+                sum[t]--;
+                sum[tid]++;
+            }
+        }
+    }
+    for (int t = 0; t < NE; ++t) assert(sum[t] == alloyState.NT[t]);
+    ini_W();
 }
 
-void thermoqs()
-{
-        int i;
-        double T,U,Z,C,F,S,M,M2,X;
-        double centerE,lambda,Bw,Nfree;
+void vae_update(SamplingMode mode) {
+    float z[3] = {0, 0, 0};
+    alloyState.Atomo = alloyState.Atom;
+    std::vector<int> Wo = alloyState.W;
 
-        FILE *therm_op;
-        char s1[512];
+    encode(z);
+    walk(z);
+    decode(z);
 
-        //Opening File containing all thermodynamic quantities (in following order)
-        //      T       U       Cv      freeE  Entropy  Rgyr2  EEdist
-        sprintf(s1,"therm.dat");
-        therm_op=fopen(s1,"w");
+    const double E1 = alloyState.currEtot;
+    const double E2 = Etot();
+    const double deltaE = E2 - E1;
+    alloyState.attd++;
 
-        if( (therm_op==NULL) )
-        {
-                fprintf(stderr, "\nHey, this file ( in thermoqs() ) could not be opened!\n\n");
-                exit(1);
-        };
-        //Normalization for free energy
-        Nfree = 0.0;
+    auto revert = [&]() {
+        alloyState.Atom = alloyState.Atomo;
+        alloyState.W = std::move(Wo);
+    };
 
-        //Main Temperature Loop
-        for(T=alloyState.TTi;T<=alloyState.TTf+alloyState.dTT;T=T+alloyState.dTT)
-        {
-                U = 0.0;        // Initializing the average energy <E>
-                Z = 0.0;        // Initializing the Partition Function
-                C = 0.0;        // Initialize the Specific Heat
-                F = 0.0;        // Initialize the free energy
-                S = 0.0;        // Initialize the entropy
-                Bw = 0.0;       //Boltzmann weight
-		M = M2 = X = 0.0; // order parameter
-                lambda = -1.0e300;      //Normalization shift (max value of DOS considering T)
-                centerE = 0.0;  // Taking the center of the energy bin
-               //Finds the max and min of exp( wllng[][] )*exp(Etot*N/T)
-                for(i=0;i<wlState.D1BINS;i++)
-                {
-                        centerE = ( (i/wlState.invdWLD1+wlState.WLD1min) + 0.5*(wlState.WLD1max - wlState.WLD1min)/(1.0*wlState.D1BINS) )/alloyState.invN;
-
-                        if( (lambda < ((wlState.wllng[i]) - 1.0*(centerE*E_scale)/(T*T_scale))) )// && (wllng[i] > 0.0) )
-                                lambda = ((wlState.wllng[i]) - 1.0*(centerE*E_scale)/(T*T_scale));
-
-                };
-
-                //Central Loop for calculating thermodynamic properties from the DOS
-                for(i=0;i<wlState.D1BINS;i++)
-                {
-                        //Taking the center of the bin
-                        centerE = ( (i/wlState.invdWLD1+wlState.WLD1min) + 0.5*(wlState.WLD1max - wlState.WLD1min)/(1.0*wlState.D1BINS) )/alloyState.invN;
-
-                        //Boltzmann Factor
-                        Bw =  exp( wlState.wllng[i]  - (centerE*E_scale)/(T*T_scale) - lambda );
-
-                        //Partition Function
-                        Z = Z + Bw;
-
-                        //Average Energy <E>
-                        U = U + (centerE)*Bw;
-
-                        //Average Energy Squared <E^2>
-                        C = C + (centerE)*(centerE)*Bw;  
-
-			if(wlState.wlH[i] > 0){
-				M += wlState.wllngi[i]/wlState.wlH[i]*Bw;
-				M2 += wlState.wllngd[i]/wlState.wlH[i]*Bw;
-			}                                                      
-                };
-
-                //Internal Energy
-                U = U/Z;
-                //Normalization of free energy
-                if(T == alloyState.TTi)
-                {
-                        Nfree = -(T*T_scale)/E_scale*( lambda + log(Z) ) - U;
-                };
-                //Specific Heat
-                C = ( (C/Z) - (U*U) )*E_scale*E_scale / (T*T*T_scale*T_scale);
-                //Free Energy
-                F = -(T*T_scale)/E_scale*( lambda + log(Z) ) - Nfree;
-                //Entropy
-                S = (U - F)*E_scale/(T*T_scale);
-
-		//VAE order parameter
-		M /= Z; M2 /= Z;
-		X = (M2 - M*M)*alloyState.N_3/T/T_scale; 
-
-                fprintf(therm_op,"%g\t%g\t%g\t%g\t%g\t%g\t%g\n",T,U*alloyState.invN,C*alloyState.invN,F*alloyState.invN,S*alloyState.invN,M,X);
-        };
-
-        fclose(therm_op);
+    if (mode == metropolis) {
+        if (Metropolis(alloyState.currEtot, alloyState.currEtot + deltaE) == 1) {
+            alloyState.currEtot += deltaE;
+            alloyState.accd++;
+        } else {
+            revert();
+        }
+    } else {
+        if (WangLandau(alloyState.currEtot, alloyState.currEtot + deltaE, mode) == 1) {
+            alloyState.currEtot += deltaE;
+            alloyState.accd++;
+        } else {
+            revert();
+        }
+    }
 }
 
-double L1(){
-	float z[3];
-	encode(z);
-	double M = 0.0;
-	for(int i=0;i<3;i++)
-		M += fabs(z[i]);
-
-	return M;
+void write_pos() {
+    FILE* ofp = std::fopen("compos.dat", "w");
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                std::fprintf(ofp, "%d\t%d\t%d\t%d\t \n", i + k, i + j, j + k,
+                             alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k]);
+            }
+        }
+    }
+    std::fclose(ofp);
 }
 
-// VAE order parameter 
-void OrderParameter(int idx){
-	double M;  
-	M = L1();
-	assert(idx >=0 && idx < wlState.D1BINS);
-        alloyState.op[idx] += M;
-        alloyState.op2[idx] += M*M;
+void write_xyz(int frame) {
+    const int NE = alloyState.NE;
+    const int SH = alloyState.SH;
+    char s[512];
+    std::snprintf(s, sizeof(s), "snap_%d_%d.xyz", frame, mpiState.myrank);
+    FILE* ofp = std::fopen(s, "ab+");
+    std::fprintf(ofp, "%d\n", alloyState.N_3);
+    std::fprintf(ofp, "Eng = %.8lg  MC_step = %d\n", alloyState.currEtot, frame);
+
+    for (int shell = 0; shell < SH; ++shell) {
+        for (int i = 0; i < NE - 1; ++i) {
+            for (int j = i + 1; j < NE; ++j) {
+                std::fprintf(ofp, "%.8lg\t",
+                             1.0 * alloyState.W_at(i, j, shell) /
+                                 alloyState.NS[shell] / alloyState.N_3);
+            }
+        }
+    }
+    std::fprintf(ofp, "\n");
+
+    for (int i = 0; i < alloyState.N; ++i) {
+        for (int j = 0; j < alloyState.N; ++j) {
+            for (int k = 0; k < alloyState.N; ++k) {
+                std::fprintf(ofp, "%s %d %d %d \n",
+                             alloyState.element[alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] + 1].c_str(),
+                             j - i + k, k - j + i, j + i - k);
+            }
+        }
+    }
+    std::fclose(ofp);
 }
 
+void thermoqs() {
+    FILE* therm_op = std::fopen("therm.dat", "w");
+    if (therm_op == nullptr) {
+        std::fprintf(stderr, "\nthermoqs(): could not open therm.dat\n");
+        std::exit(1);
+    }
+    double Nfree = 0.0;
 
+    for (double T = alloyState.TTi; T <= alloyState.TTf + alloyState.dTT;
+         T += alloyState.dTT) {
+        double U = 0.0, Z = 0.0, C = 0.0, F = 0.0, S = 0.0;
+        double Bw = 0.0;
+        double M = 0.0, M2 = 0.0, X = 0.0;
+        double lambda = -1.0e300;
+        double centerE = 0.0;
 
+        for (int i = 0; i < wlState.D1BINS; ++i) {
+            centerE = ((i / wlState.invdWLD1 + wlState.WLD1min) +
+                       0.5 * (wlState.WLD1max - wlState.WLD1min) / (1.0 * wlState.D1BINS)) /
+                      alloyState.invN;
+            if (lambda < (wlState.wllng[i] - 1.0 * centerE * kEscaleMeV / (T * kTscaleMeV))) {
+                lambda = wlState.wllng[i] - 1.0 * centerE * kEscaleMeV / (T * kTscaleMeV);
+            }
+        }
+
+        for (int i = 0; i < wlState.D1BINS; ++i) {
+            centerE = ((i / wlState.invdWLD1 + wlState.WLD1min) +
+                       0.5 * (wlState.WLD1max - wlState.WLD1min) / (1.0 * wlState.D1BINS)) /
+                      alloyState.invN;
+            Bw = std::exp(wlState.wllng[i] - centerE * kEscaleMeV / (T * kTscaleMeV) - lambda);
+            Z += Bw;
+            U += centerE * Bw;
+            C += centerE * centerE * Bw;
+            if (wlState.wlH[i] > 0) {
+                M += wlState.wllngi[i] / wlState.wlH[i] * Bw;
+                M2 += wlState.wllngd[i] / wlState.wlH[i] * Bw;
+            }
+        }
+
+        U = U / Z;
+        if (T == alloyState.TTi) {
+            Nfree = -(T * kTscaleMeV) / kEscaleMeV * (lambda + std::log(Z)) - U;
+        }
+        C = ((C / Z) - (U * U)) * kEscaleMeV * kEscaleMeV /
+            (T * T * kTscaleMeV * kTscaleMeV);
+        F = -(T * kTscaleMeV) / kEscaleMeV * (lambda + std::log(Z)) - Nfree;
+        S = (U - F) * kEscaleMeV / (T * kTscaleMeV);
+        M /= Z;
+        M2 /= Z;
+        X = (M2 - M * M) * alloyState.N_3 / T / kTscaleMeV;
+
+        std::fprintf(therm_op, "%g\t%g\t%g\t%g\t%g\t%g\t%g\n",
+                     T, U * alloyState.invN, C * alloyState.invN, F * alloyState.invN,
+                     S * alloyState.invN, M, X);
+    }
+    std::fclose(therm_op);
+}
+
+double L1() {
+    float z[3];
+    encode(z);
+    double M = 0.0;
+    for (int i = 0; i < 3; ++i) M += std::fabs(z[i]);
+    return M;
+}
+
+void OrderParameter(int idx) {
+    const double M = L1();
+    assert(idx >= 0 && idx < wlState.D1BINS);
+    alloyState.op[idx] += M;
+    alloyState.op2[idx] += M * M;
+}

@@ -41,7 +41,7 @@
    email: m-mat @ math.sci.hiroshima-u.ac.jp (remove space)
 */
 #ifndef RANDOM_H
-#define RAMDOM_H
+#define RANDOM_H
 #include <stdio.h>
 
 /* Period parameters */  

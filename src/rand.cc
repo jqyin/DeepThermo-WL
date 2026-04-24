@@ -5,8 +5,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-double invttrand; //inverse parameter for quick calculations
-struct seed_type seed = {314159265, 362436069, 521288629};
+static double invttrand;  // inverse parameter for quick calculations
+static struct seed_type seed = {314159265, 362436069, 521288629};
+int RSEED = 0;
 
 /*
   XXXXXXXXXXXXXXXXXXXXXXXXXX
