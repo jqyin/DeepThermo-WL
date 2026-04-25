@@ -10,6 +10,7 @@
 
 #include "alloy.hpp"
 #include "backend/inference_backend.hpp"
+#include "diagnostic.hpp"
 #include "pt.hpp"
 #include "rand.hpp"
 #include "wanglandau.hpp"
@@ -47,9 +48,8 @@ void ini_coupling() {
 
     FILE* fop = std::fopen(alloyState.coupling_file.c_str(), "r");
     if (fop == nullptr) {
-        std::fprintf(stderr, "could not open coupling file: %s\n",
-                     alloyState.coupling_file.c_str());
-        std::exit(1);
+        deepthermo::die("could not open coupling file: %s",
+                        alloyState.coupling_file.c_str());
     }
 
     std::vector<int> ti(n_pairs), tj(n_pairs);
@@ -169,10 +169,8 @@ void ini_alloy(int state) {
     std::vector<int> list(total, 0);
 
     if (static_cast<int>(alloyState.composition.size()) != NE) {
-        std::fprintf(stderr,
-                     "ini_alloy: composition has %zu entries but NE=%d\n",
-                     alloyState.composition.size(), NE);
-        std::exit(1);
+        deepthermo::die("ini_alloy: composition has %zu entries but NE=%d",
+                        alloyState.composition.size(), NE);
     }
 
     int cnt = 0;
@@ -509,8 +507,7 @@ void write_xyz(int frame) {
 void thermoqs() {
     FILE* therm_op = std::fopen("therm.dat", "w");
     if (therm_op == nullptr) {
-        std::fprintf(stderr, "\nthermoqs(): could not open therm.dat\n");
-        std::exit(1);
+        deepthermo::die("thermoqs(): could not open therm.dat");
     }
     double Nfree = 0.0;
 

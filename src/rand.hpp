@@ -1,9 +1,8 @@
 #pragma once
 
-// Legacy KISS RNG + Gaussian helper. Used alongside the Mersenne Twister in
-// random.h. The two share no state and are independent generators; KISS is
-// used for the Wang–Landau acceptance tests (randd1) and the shuffle, while
-// the MT is used for replica-exchange / Metropolis acceptance inside pt.cc.
+// KISS RNG + Gaussian helper. Used by the Wang–Landau acceptance tests
+// (randd1) and the lattice shuffle. Independent from the std::mt19937
+// in pt.cc that drives replica-exchange acceptance.
 
 struct seed_type {
     unsigned int i;

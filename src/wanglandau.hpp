@@ -3,7 +3,6 @@
 #include "sim_context.hpp"
 
 void initWL(void);
-void freeWL();  // retained for now; emptied in Task 7.
 void sweepWL(int sweeps, SamplingMode mode);
 void wlhybrid();
 void resetWL(void);

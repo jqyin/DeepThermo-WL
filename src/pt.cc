@@ -6,25 +6,36 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <map>
+#include <random>
 #include <vector>
 
 #include "mpi.h"
 
 #include "alloy.hpp"
+#include "diagnostic.hpp"
 #include "pt.hpp"
 #include "rand.hpp"
-#include "random.h"
 
 namespace {
+
 constexpr double kEscaleMeV = 13605.69301;
 constexpr double kTscaleMeV = 0.08618;
+
+// Per-process Mersenne Twister, seeded once in ini_sys(). Replaces the
+// header-defined random.h that used to live alongside this TU.
+std::mt19937& mt_engine() {
+    static std::mt19937 engine{std::random_device{}()};
+    return engine;
 }
+
+void mt_seed(unsigned long s) { mt_engine().seed(s); }
+double mt_uniform()           { return std::uniform_real_distribution<double>{0.0, 1.0}(mt_engine()); }
+
+}  // namespace
 
 void ini_T(double Ti, double Tf, int nT) {
     if (Ti * Tf <= 1e-5) {
-        std::fprintf(stderr, "ini_T: invalid temperature range\n");
-        std::exit(1);
+        deepthermo::die("ini_T: invalid temperature range (Ti=%g, Tf=%g)", Ti, Tf);
     }
     ptState.T.assign(nT, 0.0);
     ptState.T[0] = std::log(Ti);
@@ -43,12 +54,9 @@ void ini_sys() {
     alloyState.Atom.assign(alloyState.N_3, 0);
     alloyState.Atomo.assign(alloyState.N_3, 0);
     ptState.att = ptState.acc = 0;
-    init_genrand(static_cast<unsigned long>(mpiState.myrank * std::rand()));
+    mt_seed(static_cast<unsigned long>(mpiState.myrank * std::rand()));
 
     initialize();
-#ifdef RESTART
-    if (ptState.Restart == 1) read_state();
-#endif
 }
 
 namespace {
@@ -82,7 +90,7 @@ void swap(bool even) {
         const double delta = (Ei - Ej) * kEscaleMeV *
                              (1 / (kTscaleMeV * ptState.T[peer_up]) -
                               1 / (kTscaleMeV * ptState.T[mpiState.myrank]));
-        bool flag = (delta <= 0 || genrand_real2() < std::exp(-delta));
+        bool flag = (delta <= 0 || mt_uniform() < std::exp(-delta));
         MPI_Send(&flag, 1, MPI_LOGICAL, peer_up, itag, MPI_COMM_WORLD);
         ptState.att++;
         if (flag) {
@@ -135,8 +143,6 @@ void mchybrid(SamplingMode mode) {
 
 void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun,
                         SamplingMode mode) {
-    std::vector<double> Et(static_cast<std::size_t>(SAMPS + DROPI), 0.0);
-    std::vector<double> Mt(static_cast<std::size_t>(SAMPS + DROPI), 0.0);
     std::vector<double> Ea(nT, 0.0);
     std::vector<double> Ma(nT, 0.0);
     std::vector<double> ca(nT, 0.0);
@@ -148,7 +154,6 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
     double avgE = 0.0, avgE2 = 0.0, avgM = 0.0, avgM2 = 0.0, avgM4 = 0.0;
     bool flag = true, stop = false;
     std::time_t t1 = 0, t2 = 0;
-    std::map<double, int> histE, histM;
 
     if (mpiState.myrank == 0) t1 = std::time(nullptr);
 
@@ -159,10 +164,6 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
                 swap(flag);
                 flag = !flag;
             }
-#ifdef Time_Series
-            Et[mcs] = alloyState.currEtot;
-            Mt[mcs] = L1();
-#endif
         }
     }
 
@@ -171,10 +172,7 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
         char s[512];
         std::snprintf(s, sizeof(s), "mc%d.input", mpiState.myrank);
         FILE* ofp1 = std::fopen(s, "rb");
-        if (ofp1 == nullptr) {
-            std::printf("mc.input not found\n");
-            std::exit(-3);
-        }
+        if (ofp1 == nullptr) deepthermo::die("mc.input not found: %s", s);
         std::fread(&mcs, sizeof(int), 1, ofp1);
         std::fread(&avgE, sizeof(double), 1, ofp1);
         std::fread(&avgE2, sizeof(double), 1, ofp1);
@@ -226,15 +224,6 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
                 std::exit(123);
             }
         }
-
-#ifdef HIST
-        ++histE[alloyState.currEtot];
-        ++histM[M];
-#endif
-#ifdef Time_Series
-        Mt[mcs] = M;
-        Et[mcs] = alloyState.currEtot;
-#endif
         mcs++;
     }
 
@@ -249,31 +238,6 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
                      (kTscaleMeV * kTscaleMeV * ptState.pT * ptState.pT);
     const double x = (avgM2 - avgM * avgM) * alloyState.N_3 / ptState.pT / kTscaleMeV;
     const double bc = 1 - avgM4 / avgM2 / avgM2 / 3;
-
-#ifdef Time_Series
-    if (mpiState.myrank < mpiState.nprocs) {
-        char s[512];
-        std::snprintf(s, sizeof(s), "EMt%g.dat", ptState.pT);
-        FILE* ofp1 = std::fopen(s, "w");
-        for (std::size_t i = 0; i < Et.size(); ++i) {
-            std::fprintf(ofp1, "%zu\t%g\t%g\n", i, Et[i], Mt[i]);
-        }
-        std::fclose(ofp1);
-    }
-#endif
-#ifdef HIST
-    if (mpiState.myrank < mpiState.nprocs) {
-        char s[512];
-        std::snprintf(s, sizeof(s), "histE%g.dat", ptState.pT);
-        FILE* ofp1 = std::fopen(s, "w");
-        for (auto& kv : histE) std::fprintf(ofp1, "%g\t%d\n", kv.first, kv.second);
-        std::fclose(ofp1);
-        std::snprintf(s, sizeof(s), "histM%g.dat", ptState.pT);
-        ofp1 = std::fopen(s, "w");
-        for (auto& kv : histM) std::fprintf(ofp1, "%g\t%d\n", kv.first, kv.second);
-        std::fclose(ofp1);
-    }
-#endif
 
     MPI_Gather(&avgE, 1, MPI_DOUBLE, Ea.data(), 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Gather(&avgM, 1, MPI_DOUBLE, Ma.data(), 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -318,10 +282,6 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
     }
 }
 
-void freePT() {
-    // No-op: vectors free themselves when SimContext goes out of scope.
-}
-
 void write_state() {
     char s[512];
     std::snprintf(s, sizeof(s), "state%d.input", mpiState.myrank);
@@ -336,10 +296,7 @@ void read_state() {
     char s[512];
     std::snprintf(s, sizeof(s), "state%d.input", mpiState.myrank);
     FILE* fp = std::fopen(s, "rb");
-    if (fp == nullptr) {
-        std::printf("state file not found\n");
-        std::exit(-1);
-    }
+    if (fp == nullptr) deepthermo::die("state file not found: %s", s);
     double eng = 0.0;
     std::fread(alloyState.Atom.data(), sizeof(short), alloyState.N_3, fp);
     std::fread(alloyState.NT.data(), sizeof(int), alloyState.NE, fp);
@@ -347,8 +304,8 @@ void read_state() {
     ini_apos();
     alloyState.currEtot = Etot();
     if (std::fabs(eng - alloyState.currEtot) > 1e-5) {
-        std::printf("state file corrupted!\n");
-        std::exit(-2);
+        deepthermo::die("state file corrupted: stored E=%g, recomputed E=%g",
+                        eng, alloyState.currEtot);
     }
     std::fclose(fp);
 }

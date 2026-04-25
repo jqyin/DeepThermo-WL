@@ -9,6 +9,10 @@
 // reglin_intercept, E_scale, T_scale, gpus_per_node) are now plain fields,
 // populated by parameter.cc from the config file. Changing alloy family no
 // longer requires recompiling.
+//
+// Allocations are vector-backed; ctors allocate, dtors free. There are no
+// initWL/freeWL/freePT calls — just construct a SimContext and let it
+// clean up at scope exit.
 
 #pragma once
 

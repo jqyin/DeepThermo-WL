@@ -137,10 +137,6 @@ void initWL() {
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void freeWL() {
-    // No-op: vectors free themselves when SimContext goes out of scope.
-}
-
 void sweepWL(int nsweeps, SamplingMode mode) {
     for (int i = 0; i < nsweeps; ++i) BondSwap(mode);
 }

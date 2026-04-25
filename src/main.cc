@@ -222,8 +222,6 @@ int main(int argc, char* argv[]) {
         thermoqs();
     }
 
-    freeWL();
-    freePT();
     MPI_Finalize();
     return 0;
 }
