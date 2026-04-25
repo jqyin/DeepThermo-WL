@@ -51,19 +51,22 @@ int main(int argc, char* argv[]) {
     std::srand(user_seed * (mpiState.myrank + 1));
     shelltimeseed(std::rand() + 19 * mpiState.myrank + 19273);
 
-    std::string model_dir = "./models/";
+    try {
+        ReadInput(argv[1]);
+    } catch (const std::exception& e) {
+        if (mpiState.myrank == 0) std::fprintf(stderr, "%s\n", e.what());
+        MPI_Abort(MPI_COMM_WORLD, 2);
+    }
 
 #ifdef TF_BACKEND
     tensorflow::SessionOptions options;
     options.config.mutable_gpu_options()->set_visible_device_list(
         std::to_string(mpiState.myrank % mpiState.gpus_per_node));
-    tf_models[0].LoadModel(model_dir + "/encoder", options);
-    tf_models[1].LoadModel(model_dir + "/decoder", options);
+    tf_models[0].LoadModel(alloyState.model_dir + "/encoder", options);
+    tf_models[1].LoadModel(alloyState.model_dir + "/decoder", options);
 #else
-    LoadClientModel(model_dir);
+    LoadClientModel(alloyState.model_dir);
 #endif
-
-    ReadInput(argv[1]);
     ini_T(ptState.MTi, ptState.MTf, mpiState.nprocs);
     ini_sys();
 

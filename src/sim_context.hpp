@@ -171,6 +171,15 @@ public:
 
     int NBINTERACTION = 0;
 
+    // Per-element initial composition fractions (sums ~1.0). Used by
+    // ini_alloy() instead of the legacy composition.input file.
+    std::vector<double> composition;
+
+    // External files referenced by the run. Both default to the legacy
+    // names; they are overridable via [model] / [lattice] in config.toml.
+    std::string coupling_file = "coupling.input";
+    std::string model_dir = "./models";
+
     // Allocates the NE-dependent arrays (J, W, NS, Dist, NT). Call once
     // NE and SH are finalised by ReadInput(). Safe to call repeatedly.
     void resize_pair_arrays();

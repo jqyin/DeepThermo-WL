@@ -1,10 +1,5 @@
-#ifndef INPUTOUTPUT_H
-#define INPUTOUTPUT_H
+#pragma once
 
-//InputOutput Functions
-void ErrorMsg(int, const char*);
-void ReadInput(const char*);
-void WriteInput();
-
-#endif
-
+// Loads <filename> (a TOML configuration) into the global SimContext fields.
+// Throws std::runtime_error on parse / validation failure.
+void ReadInput(const char* filename);

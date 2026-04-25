@@ -55,9 +55,10 @@ void ini_coupling() {
 
     alloyState.resize_pair_arrays();
 
-    FILE* fop = std::fopen("coupling.input", "r");
+    FILE* fop = std::fopen(alloyState.coupling_file.c_str(), "r");
     if (fop == nullptr) {
-        std::printf("coupling.input file was not opened\n");
+        std::fprintf(stderr, "could not open coupling file: %s\n",
+                     alloyState.coupling_file.c_str());
         std::exit(1);
     }
 
@@ -177,22 +178,18 @@ void ini_alloy(int state) {
     const int total = alloyState.N * alloyState.N * alloyState.N;
     std::vector<int> list(total, 0);
 
-    FILE* fop = std::fopen("composition.input", "r");
-    if (fop == nullptr) {
-        std::printf("composition.input file was not opened\n");
+    if (static_cast<int>(alloyState.composition.size()) != NE) {
+        std::fprintf(stderr,
+                     "ini_alloy: composition has %zu entries but NE=%d\n",
+                     alloyState.composition.size(), NE);
         std::exit(1);
     }
 
     int cnt = 0;
     for (int t = 0; t < NE; ++t) {
-        double p = 0.0;
-        std::fscanf(fop, "%lg", &p);
+        const double p = alloyState.composition[t];
         const int Ni = static_cast<int>(total * p);
-        int cnti = 0;
-        while (cnti < Ni) {
-            list[cnt++] = t;
-            cnti++;
-        }
+        for (int cnti = 0; cnti < Ni; ++cnti) list[cnt++] = t;
         alloyState.NT[t] = 0;
     }
     while (cnt < total) {
@@ -214,7 +211,6 @@ void ini_alloy(int state) {
             }
         }
     }
-    std::fclose(fop);
 
     for (int t = 0; t < NE; ++t) {
         std::fprintf(stderr, "%s:%d\n",
