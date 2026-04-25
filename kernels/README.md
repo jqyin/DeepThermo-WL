@@ -1,40 +1,40 @@
 ## 3D convolution kernel benchmark
 
-Modified from [DeepBench](https://github.com/baidu-research/DeepBench)
+Modified from [DeepBench](https://github.com/baidu-research/DeepBench).
+This is an independent microbenchmark — it does not link against the
+DeepThermo simulation engine and uses its own Makefile under each
+sub-directory.
 
-### Software Requirements:
+### Requirements
 
-- cuda >= 10.1
-- rocm >= 4.5 
+- CUDA / cuDNN (Perlmutter, NVIDIA A100), or
+- ROCm / MIOpen (Frontier, AMD MI250X)
 
 ### Quickstart
 
-- Clone the repo
+Perlmutter:
 ```bash
-git clone https://code.ornl.gov/jqyin/deepthermo-wl
-cd kernels
-```
-
-- Submit the job script that will complie the source code and run the benchmark
-
-Summit 
-```bash
-cd nvidia
-bsub conv3D.lsf
-```
-Crusher
-```bash 
-cd amd
+cd kernels/nvidia
 sbatch conv3D.sb
 ```
 
-- The generated log file contains the run time (usec) for various input parameters
-
+Frontier:
 ```bash
+cd kernels/amd
+sbatch conv3D.sb
+```
+
+### Output
+
+The launchers write `log.fp32` containing the per-shape timing table:
+
+```
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
    w      h      c      n      k      f_w      f_h    pad_w  pad_h    stride_w  stride_h    fwd_time (usec)  bwd_inputs_time (usec)  bwd_params_time (usec)  total_time (usec)   fwd_algo
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     2      2     64      1     64      3      3      1       1         2         2            76                      76                      76                228   ConvolutionFwdAlgoGEMM
 ```
-The above shows the batch (n) 1 input (w, h, c) of (2x2x64) with filter size (3), padding (1), and stride (2) takes 76 usec for forward pass with ConvolutionFwdAlgoGEMM algorithm     
 
+`fwd_time / bwd_inputs_time / bwd_params_time` are in microseconds; the
+shape columns describe one VAE conv layer (paper Table I) at the indicated
+input geometry.

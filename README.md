@@ -1,29 +1,103 @@
-# DeepThermo: Deep Learning Accelerated Parallel Monte Carlo Sampling for Thermodynamics Evaluation of High Entropy Alloys 
-This repository provides code for distributed Monte Carlo Sampling with Deep Learning generated proposals. The sampling methods include both Parallel Tempering and Wang-Landau sampling.  
+# DeepThermo: Deep Learning Accelerated Parallel Monte Carlo Sampling for High Entropy Alloys
 
-## Software Requirements
+DeepThermo is an MPI C++ engine for distributed Monte Carlo sampling of
+high-entropy alloys, with large MC moves proposed by a pre-trained
+variational autoencoder. It implements parallel tempering and Wang–Landau
+sampling and scales to thousands of GPUs (paper: Yin, Wang, Shankar,
+*DeepThermo*, IPDPS 2023, [DOI 10.1109/IPDPS54959.2023.00041](https://doi.org/10.1109/IPDPS54959.2023.00041)).
 
-- TensorFlow >= 2.4
-- SmartRedis >= 0.2 
-- Horovod >= 0.22
-- gcc >= 9.0 
-- MPI 
+This is the **v2** layout (April 2026 refactor):
 
-## Build 
-Sampling code is under `src` with Makefiles provided for `Summit` and `Crusher`. 
+- Inference is pluggable. Three backends — **LibTorch (default)**,
+  TensorFlow C++, SmartRedis/RedisAI — sit behind one
+  `InferenceBackend` interface.
+- Build system is CMake. Targets OLCF Frontier (AMD MI250X / ROCm) and
+  NERSC Perlmutter (NVIDIA A100 / CUDA); both produce the same source.
+- Configuration is a single `config.toml` (see `examples/`).
+- VAE training and TorchScript export live in the
+  [`vae-modeling`](https://code.ornl.gov/jqyin/deepthermo) submodule on
+  branch `torch` (PyTorch + DDP, replacing the old tf.keras/Horovod stack).
 
-3D convolution kernel benchmark code is under `kernels` for Nvidia `cuDNN` and AMD `MIOpen`.
+## Build
 
-Step-by-step quickstart can be followed for [MC sampling](https://code.ornl.gov/jqyin/deepthermo-wl/-/blob/vae-proposal/examples/README.md) and [kernel benchmarking](https://code.ornl.gov/jqyin/deepthermo-wl/-/blob/vae-proposal/kernels/README.md)
+Frontier:
+```bash
+git clone --recurse-submodules https://code.ornl.gov/jqyin/deepthermo-wl
+cd deepthermo-wl
+export TORCH_INSTALL_PREFIX=/path/to/libtorch-rocm
+./scripts/build-frontier.sh
+```
 
-## VAE model training
-VAE modeling is based on `tf.keras` using `Horovod` for distributed data parallel, with a reproducible Code Ocean [capsule](https://doi.org/10.24433/CO.8787331.v1).   
+Perlmutter:
+```bash
+export TORCH_INSTALL_PREFIX=/path/to/libtorch-cuda
+./scripts/build-perlmutter.sh
+```
 
-Three pretrained models for MoNbTaW of size 10<sup>3</sup>, 16<sup>3</sup>, 20<sup>3</sup> are provided under `models`. 
+Generic (laptop / CI):
+```bash
+cmake -B build -DCMAKE_PREFIX_PATH=/path/to/libtorch-cpu -DDEEPTHERMO_BACKEND=torch
+cmake --build build --parallel
+```
 
-## Monte Carlo Sampling of High Entropy Alloys
-Two example input and job scripts are provided for MoNbTaW on `Summit` and `Crusher` under `examples`, with [plot utility](https://code.ornl.gov/jqyin/deepthermo-wl/-/blob/vae-proposal/utils/plots.ipynb) avaliable.  
+Backend selection: `-DDEEPTHERMO_BACKEND={torch,tf,redis}`. The default is
+`torch`. The TF and SmartRedis paths still work for users with existing
+SavedModel / `.pb` artifacts; see `examples/README.md`.
 
+## Run
 
+```bash
+cd examples/perlmutter        # or examples/frontier
+sbatch hea-wl.sb              # produces run.dat, therm.dat, DOS_H_iter*.dat
+```
 
+A run needs three files in the working directory:
+- `config.toml` — the simulation configuration (TOML).
+- `coupling.input` — per-shell pair couplings (tabular).
+- `models/encoder_<alloy>.pt`, `models/decoder_<alloy>.pt` —
+  TorchScript artefacts produced by the submodule's `export_torchscript.py`.
 
+## VAE training
+
+PyTorch + `torch.distributed` DDP. See the submodule README and
+`vae-modeling/vae/run-{frontier,perlmutter}.sb` for ready-to-run launchers.
+Stage 1 (PT warm-up to collect training configs) is the same as the
+production run; stage 2 (training) is in the submodule; stage 3 (WL
+sampling with the trained VAE) runs the C++ binary built here.
+
+## Tests
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+Two suites: `deepthermo_unit` (doctest, ~0.5 s) and `deepthermo_smoke`
+(end-to-end pipeline on a tiny config, ~3 s; soft-skips if `python3 +
+torch + mpirun` aren't on PATH).
+
+## Layout
+
+```
+src/                 simulation engine + InferenceBackend impls
+src/backend/         {torch,tf,smartredis}_backend + factory
+third_party/         vendored tomlplusplus, doctest (single-header)
+cmake/               backend selection helpers
+scripts/             build wrappers per platform
+examples/{frontier,perlmutter}/   ready-to-run configs + Slurm launchers
+kernels/{nvidia,amd}              standalone 3D-conv kernel microbenchmarks
+tests/{unit,smoke}                ctest suites
+utils/               plots.ipynb post-processing notebook + freeze helper
+vae-modeling/        submodule: PyTorch VAE training + TorchScript export
+```
+
+## Citing
+
+```bibtex
+@inproceedings{deepthermo2023,
+  author    = {Junqi Yin and Feiyi Wang and Mallikarjun Shankar},
+  title     = {DeepThermo: Deep Learning Accelerated Parallel Monte Carlo
+               Sampling for Thermodynamics Evaluation of High Entropy Alloys},
+  booktitle = {IPDPS},
+  year      = {2023},
+  doi       = {10.1109/IPDPS54959.2023.00041}
+}
+```

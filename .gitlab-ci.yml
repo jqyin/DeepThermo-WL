@@ -1,0 +1,45 @@
+stages:
+  - build
+  - test
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
+  TORCH_VERSION: "2.4.0"
+  DEBIAN_FRONTEND: noninteractive
+
+# CPU-only build + test runner. Real GPU verification is left to manual
+# Frontier / Perlmutter runs; this pipeline catches regressions in the
+# build, the TOML parser, the energy / RNG paths, and the end-to-end
+# smoke pipeline.
+
+build_and_test:cpu:
+  stage: build
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y --no-install-recommends
+        build-essential cmake git ca-certificates
+        python3 python3-pip
+        libopenmpi-dev openmpi-bin
+        unzip wget
+    - python3 -m pip install --upgrade pip
+    - python3 -m pip install "torch==${TORCH_VERSION}+cpu" --index-url https://download.pytorch.org/whl/cpu
+    - python3 -m pip install numpy
+    # LibTorch C++ distribution (CPU only).
+    - mkdir -p /opt && cd /opt
+    - wget -q https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-${TORCH_VERSION}%2Bcpu.zip -O libtorch.zip
+    - unzip -q libtorch.zip
+    - export TORCH_INSTALL_PREFIX=/opt/libtorch
+  script:
+    - cmake -B build
+        -DCMAKE_PREFIX_PATH=/opt/libtorch
+        -DDEEPTHERMO_BACKEND=torch
+        -DDEEPTHERMO_BUILD_TESTS=ON
+    - cmake --build build --parallel
+    - ctest --test-dir build --output-on-failure
+  artifacts:
+    when: on_failure
+    paths:
+      - build/Testing/Temporary/LastTest.log
+    expire_in: 1 week

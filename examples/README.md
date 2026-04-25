@@ -1,50 +1,74 @@
-## Quickstart examples on Summit and Crusher 
+## DeepThermo example runs
 
-### Summit 
+Two ready-to-go configurations: `perlmutter/` (NVIDIA A100, NERSC) and
+`frontier/` (AMD MI250X, OLCF). Both target MoNbTaW at N=10. Switch alloy
+family by editing `config.toml` (`elements`, `composition`, `NE`,
+`reglin_intercept`) — no recompile needed.
 
-- Build SmartRedis following [recipe](https://www.craylabs.org/docs/installation.html#smartsim-on-summit-at-olcf) or download the pre-built [tarbar](https://www.dropbox.com/s/3kxmwj2xepr9tnl/envs.tar?dl=0). TensorFlow is available via open-ce module. 
+## Frontier
 
-- Clone the repo
 ```bash
-git clone https://code.ornl.gov/jqyin/deepthermo-wl
+# 1. Build the binary (LibTorch ROCm)
+export TORCH_INSTALL_PREFIX=/ccs/proj/.../libtorch-rocm
+../../scripts/build-frontier.sh
+
+# 2. Make sure the TorchScript model files are in place
+mkdir -p models
+# encoder_MoNbTaW.pt and decoder_MoNbTaW.pt are produced by
+# vae-modeling/vae/src/export_torchscript.py once you have a trained
+# vae.pt. See ../vae-modeling/README.md for the training pipeline.
+cp /path/to/encoder_MoNbTaW.pt models/
+cp /path/to/decoder_MoNbTaW.pt models/
+
+# 3. Submit
+cd examples/frontier
+sbatch hea-wl.sb
 ```
 
-- Build the binary for DeepThermo 
+## Perlmutter
+
 ```bash
-cd src
-module load gcc
-make clean
-make -f makefile.summit REDIS_DIR=<path-to-smartredis-built>
-cp hea-wl ../examples/summit/
+export TORCH_INSTALL_PREFIX=/global/.../libtorch-cuda
+../../scripts/build-perlmutter.sh
+
+mkdir -p models
+cp /path/to/encoder_MoNbTaW.pt models/
+cp /path/to/decoder_MoNbTaW.pt models/
+
+cd examples/perlmutter
+sbatch hea-wl.sb
 ```
 
-- Run the example 
-```bash 
-cd ../examples/summit 
-# edit the env.sh and change REDIS_DIR=<path-to-smartredis-built>
-bsub hea-wl.lsf 
-```
+## Other backends
 
-### Crusher 
+The default is LibTorch. If you have an existing TensorFlow SavedModel or
+SmartRedis-served `.pb`, configure with the matching backend:
 
-- Build TensorFlow using [build-tf-crusher.sh](https://code.ornl.gov/jqyin/deepthermo-wl/-/blob/vae-proposal/utils/build-tf-crusher.sh) or download the pre-built [tarbar](https://www.dropbox.com/s/3kxmwj2xepr9tnl/envs.tar?dl=0).  
-
-- Clone the repo
 ```bash
-git clone https://code.ornl.gov/jqyin/deepthermo-wl
+# TF C++ — uses the SavedModel directories under <model_dir>/encoder and
+# <model_dir>/decoder.
+cmake -B build -DDEEPTHERMO_BACKEND=tf -DTF_DIR=/path/to/tensorflow ...
+
+# SmartRedis — co-locate a redis-server per GPU on each node before
+# launching hea-wl; encoder_<alloy>.pb / decoder_<alloy>.pb live under
+# <model_dir>/.
+cmake -B build -DDEEPTHERMO_BACKEND=redis -DREDIS_DIR=/path/to/smartredis ...
 ```
 
-- Build the binary for DeepThermo 
-```bash
-cd src
-module load PrgEnv-gnu
-make -f makefile.crusher TF_DIR=<path-to-tf-built>
-cp hea-wl ../examples/crusher/ 
-```
+The pre-shipped TF SavedModels for MoNbTaW at N=10/16/20 are under the
+top-level `models/` directory.
 
-- Run the example 
-```bash 
-cd ../examples/crusher
-# edit the env.sh and change TF_DIR=<path-to-TF-built>
-sbatch hea-wl.sb 
-```
+## Outputs
+
+After a successful run the working directory contains:
+
+| file               | meaning                                                             |
+|--------------------|---------------------------------------------------------------------|
+| `run.dat`          | per-WL-iteration log: lnf, total sweeps, iter sweeps, flatness, etc |
+| `comm.dat`         | allreduce timing for the WL inner loop                              |
+| `DOS_H_iter*.dat`  | density of states + histogram per WL iteration                      |
+| `therm.dat`        | thermodynamic quantities U, C, F, S, M, χ over the temperature grid |
+| `compos.dat`       | atom-position dump after PT warm-up                                 |
+| `infer.dat`        | VAE inference timing (only on the second WL iter, rank 0)           |
+
+`utils/plots.ipynb` consumes these to reproduce the paper's Figs. 12 / 15.
