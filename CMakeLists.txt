@@ -26,6 +26,7 @@ set_property(CACHE DEEPTHERMO_PLATFORM PROPERTY STRINGS generic frontier perlmut
 option(DEEPTHERMO_BUILD_TESTS "Build unit + smoke tests" ON)
 option(DEEPTHERMO_ENABLE_GLOBAL_UPDATE "Enable VAE-driven global update (-DGLOBAL_UPDATE)" ON)
 option(DEEPTHERMO_ENABLE_RING_ALLREDUCE "Use ring allreduce instead of MPI_Allreduce" OFF)
+option(DEEPTHERMO_BUILD_DOCS "Add a `docs` target that runs Doxygen" ON)
 
 message(STATUS "DeepThermo backend  : ${DEEPTHERMO_BACKEND}")
 message(STATUS "DeepThermo platform : ${DEEPTHERMO_PLATFORM}")
@@ -58,5 +59,21 @@ if(DEEPTHERMO_BUILD_TESTS)
     enable_testing()
     if(EXISTS ${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)
         add_subdirectory(tests)
+    endif()
+endif()
+
+# ---- documentation -------------------------------------------------------
+
+if(DEEPTHERMO_BUILD_DOCS)
+    find_package(Doxygen QUIET)
+    if(DOXYGEN_FOUND)
+        add_custom_target(docs
+            COMMAND Doxygen::doxygen ${CMAKE_SOURCE_DIR}/Doxyfile
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Generating Doxygen HTML/man docs into docs/"
+            VERBATIM)
+        message(STATUS "Doxygen found; `cmake --build <build> --target docs` will generate docs/")
+    else()
+        message(STATUS "Doxygen not found; skipping `docs` target")
     endif()
 endif()

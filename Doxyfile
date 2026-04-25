@@ -1,0 +1,104 @@
+# Doxygen configuration for DeepThermo.
+#
+# Build the docs from the repo root with either of:
+#   doxygen Doxyfile
+#   cmake --build build --target docs   # if DEEPTHERMO_BUILD_DOCS=ON
+#
+# Output lands in docs/html/ (and docs/man/). Both are .gitignore'd.
+
+PROJECT_NAME           = "DeepThermo"
+PROJECT_NUMBER         = "v2.0"
+PROJECT_BRIEF          = "Deep learning-accelerated parallel Monte Carlo sampling for high-entropy alloys"
+
+OUTPUT_DIRECTORY       = docs
+USE_MDFILE_AS_MAINPAGE = README.md
+
+# What to scan
+INPUT                  = README.md \
+                         CLAUDE.md \
+                         examples/README.md \
+                         kernels/README.md \
+                         src \
+                         src/backend
+FILE_PATTERNS          = *.cc *.hpp *.h *.md
+RECURSIVE              = NO
+EXCLUDE_PATTERNS       = */third_party/* */build*/* */tests/* */vae-modeling/*
+
+# What to extract
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = YES
+HIDE_UNDOC_MEMBERS     = NO
+INTERNAL_DOCS          = NO
+
+# Source / output flavor
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MULTILINE_CPP_IS_BRIEF = NO
+INLINE_SIMPLE_STRUCTS  = YES
+SEPARATE_MEMBER_PAGES  = NO
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+VERBATIM_HEADERS       = YES
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# C++ specifics
+BUILTIN_STL_SUPPORT    = YES
+TEMPLATE_RELATIONS     = YES
+
+# HTML output
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+SEARCHENGINE           = YES
+HTML_DYNAMIC_MENUS     = YES
+HTML_DYNAMIC_SECTIONS  = NO
+HTML_COLORSTYLE        = AUTO_LIGHT
+ENUM_VALUES_PER_LINE   = 1
+
+# Disable unused outputs
+GENERATE_LATEX         = NO
+GENERATE_RTF           = NO
+GENERATE_XML           = NO
+GENERATE_MAN           = YES
+MAN_OUTPUT             = man
+
+# Diagrams (graphviz)
+HAVE_DOT               = YES
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+INCLUDED_BY_GRAPH      = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+GRAPHICAL_HIERARCHY    = YES
+DIRECTORY_GRAPH        = YES
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+
+# Quiet diagnostics for clean default output
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+WARN_AS_ERROR          = NO
+
+# Macro handling — make sure Doxygen sees the public side of the
+# backend factory regardless of which DEEPTHERMO_BACKEND_* macro is
+# active for the build.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = DEEPTHERMO_BACKEND_TORCH \
+                         DEEPTHERMO_PLATFORM_FRONTIER
+
+# Aliases for common DeepThermo doc patterns
+ALIASES                = "paper{1}=Paper §\1." \
+                         "todo{1}=\xrefitem todo \"Todo\" \"Todo List\" \1"

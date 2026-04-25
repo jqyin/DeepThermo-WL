@@ -28,6 +28,10 @@ hea.o*
 *.pyc
 __pycache__/
 
+# Doxygen output
+docs/html/
+docs/man/
+
 # IDE
 .vscode/
 .idea/
