@@ -1,6 +1,11 @@
 #include "sim_context.hpp"
 
+#include "backend/inference_backend.hpp"
+
 namespace deepthermo {
+
+SimContext::SimContext() = default;
+SimContext::~SimContext() = default;
 
 void WLState::resize(int bins) {
     D1BINS = bins;

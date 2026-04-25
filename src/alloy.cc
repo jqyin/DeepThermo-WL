@@ -9,20 +9,10 @@
 #include <vector>
 
 #include "alloy.hpp"
+#include "backend/inference_backend.hpp"
 #include "pt.hpp"
 #include "rand.hpp"
 #include "wanglandau.hpp"
-
-#ifdef TF_BACKEND
-#include "model.hpp"
-#else
-#include "client.hpp"
-#endif
-
-// TF_BACKEND path still declares these in model.hpp; SmartRedis path
-// declares them in client.hpp. Task 4 folds both behind an InferenceBackend
-// interface and kills the #ifdef.
-extern std::string encoder_name, decoder_name;
 
 namespace {
 constexpr double kEscaleMeV = 13605.69301;
@@ -335,57 +325,18 @@ void encode(float* z) {
                (j + i - k + SHIFT + PAD) * NE;
     };
 
-#ifdef TF_BACKEND
-    tensorflow::TensorShape data_shape({1, VAE_D, VAE_D, VAE_D, NE});
-    tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-    auto data_ = data.flat<float>().data();
-    for (int i = 0; i < alloyState.N; ++i) {
-        for (int j = 0; j < alloyState.N; ++j) {
-            for (int k = 0; k < alloyState.N; ++k) {
-                const int idx = voxel_index(i, j, k);
-                for (int t = 0; t < NE; ++t) {
-                    if (alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] == t) {
-                        data_[idx + t] = 1;
-                        break;
-                    } else {
-                        data_[idx + t] = 0;
-                    }
-                }
-            }
-        }
-    }
-    std::vector<tensorflow::Tensor> outputs;
-    tf_models[0].Predict(data, outputs, PredictMode::encoder);
-    for (int i = 0; i < 3; ++i) z[i] = outputs[0].flat<float>().data()[i];
-#else
-    std::string rankID = std::to_string(mpiState.myrank);
     std::fill(alloyState.inputConfig.begin(), alloyState.inputConfig.end(), 0.0f);
     for (int i = 0; i < alloyState.N; ++i) {
         for (int j = 0; j < alloyState.N; ++j) {
             for (int k = 0; k < alloyState.N; ++k) {
                 const int idx = voxel_index(i, j, k);
-                for (int t = 0; t < NE; ++t) {
-                    if (alloyState.Atom[i * alloyState.N_2 + j * alloyState.N + k] == t) {
-                        alloyState.inputConfig[idx + t] = 1;
-                        break;
-                    }
-                }
+                const int site = i * alloyState.N_2 + j * alloyState.N + k;
+                const int t = alloyState.Atom[site];
+                alloyState.inputConfig[idx + t] = 1.0f;
             }
         }
     }
-    std::string z_key = "output_z_" + rankID;
-    std::string config_key = "input_config_" + rankID;
-    (*SRclient).put_tensor(config_key, alloyState.inputConfig.data(),
-                           {1, static_cast<std::size_t>(VAE_D),
-                                static_cast<std::size_t>(VAE_D),
-                                static_cast<std::size_t>(VAE_D),
-                                static_cast<std::size_t>(NE)},
-                           SmartRedis::TensorType::flt,
-                           SmartRedis::MemoryLayout::contiguous);
-    (*SRclient).run_model(encoder_name + rankID, {config_key}, {z_key});
-    (*SRclient).unpack_tensor(z_key, z, {3}, SmartRedis::TensorType::flt,
-                              SmartRedis::MemoryLayout::contiguous);
-#endif
+    deepthermo_sim.backend->encode(alloyState.inputConfig.data(), VAE_D, NE, z);
 }
 
 void walk(float* npos) {
@@ -432,25 +383,7 @@ void decode(float* z) {
                (j + i - k + SHIFT + PAD) * NE;
     };
 
-#ifdef TF_BACKEND
-    tensorflow::TensorShape data_shape({1, 3});
-    tensorflow::Tensor data(tensorflow::DT_FLOAT, data_shape);
-    auto data_ = data.flat<float>().data();
-    for (int i = 0; i < 3; ++i) data_[i] = z[i];
-    std::vector<tensorflow::Tensor> outputs;
-    tf_models[1].Predict(data, outputs, PredictMode::decoder);
-    std::memcpy(output.data(), outputs[0].flat<float>().data(), sizeof(float) * voxels);
-#else
-    std::string rankID = std::to_string(mpiState.myrank);
-    std::string z_key = "input_z_" + rankID;
-    std::string config_key = "output_config_" + rankID;
-    (*SRclient).put_tensor(z_key, z, {1, 3}, SmartRedis::TensorType::flt,
-                           SmartRedis::MemoryLayout::contiguous);
-    (*SRclient).run_model(decoder_name + rankID, {z_key}, {config_key});
-    (*SRclient).unpack_tensor(config_key, output.data(), {voxels},
-                              SmartRedis::TensorType::flt,
-                              SmartRedis::MemoryLayout::contiguous);
-#endif
+    deepthermo_sim.backend->decode(z, VAE_D, NE, output.data());
 
     for (int t = 0; t < NE; ++t) {
         std::fill(alloyState.elist[t].begin(), alloyState.elist[t].end(), -1);

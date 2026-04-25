@@ -14,6 +14,7 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -200,15 +201,27 @@ struct Constants {
     double E_scale = 13605.69301;   // Ry  -> meV
 };
 
-// -------------------------------------------------------------- Aggregator
+}  // namespace deepthermo
+
+// Forward-declared so SimContext can hold one without pulling the
+// heavyweight inference headers into every translation unit.
+class InferenceBackend;
+
+namespace deepthermo {
 
 class SimContext {
 public:
+    SimContext();
+    ~SimContext();
+    SimContext(const SimContext&) = delete;
+    SimContext& operator=(const SimContext&) = delete;
+
     Constants constants;
     MPIState mpi;
     PTState pt;
     WLState wl;
     AlloyState alloy;
+    std::unique_ptr<InferenceBackend> backend;
 };
 
 }  // namespace deepthermo

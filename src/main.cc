@@ -10,16 +10,11 @@
 
 #include "alloy.hpp"
 #include "allreduce.h"
+#include "backend/inference_backend.hpp"
 #include "parameter.hpp"
 #include "pt.hpp"
 #include "rand.hpp"
 #include "wanglandau.hpp"
-
-#ifdef TF_BACKEND
-#include "model.hpp"
-#else
-#include "client.hpp"
-#endif
 
 namespace {
 int default_gpus_per_node() {
@@ -58,15 +53,18 @@ int main(int argc, char* argv[]) {
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-#ifdef TF_BACKEND
-    tensorflow::SessionOptions options;
-    options.config.mutable_gpu_options()->set_visible_device_list(
-        std::to_string(mpiState.myrank % mpiState.gpus_per_node));
-    tf_models[0].LoadModel(alloyState.model_dir + "/encoder", options);
-    tf_models[1].LoadModel(alloyState.model_dir + "/decoder", options);
-#else
-    LoadClientModel(alloyState.model_dir);
-#endif
+    deepthermo_sim.backend = make_backend();
+    try {
+        deepthermo_sim.backend->load(alloyState.model_dir,
+                                     mpiState.myrank % mpiState.gpus_per_node,
+                                     mpiState.myrank, alloyState);
+    } catch (const std::exception& e) {
+        if (mpiState.myrank == 0) {
+            std::fprintf(stderr, "backend (%s) load failed: %s\n",
+                         deepthermo_sim.backend->name(), e.what());
+        }
+        MPI_Abort(MPI_COMM_WORLD, 3);
+    }
     ini_T(ptState.MTi, ptState.MTf, mpiState.nprocs);
     ini_sys();
 

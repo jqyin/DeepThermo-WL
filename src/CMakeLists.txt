@@ -1,44 +1,46 @@
-set(DEEPTHERMO_SOURCES
+set(DEEPTHERMO_CORE_SOURCES
     alloy.cc
     allreduce.cc
-    main.cc
     parameter.cc
     pt.cc
     rand.cc
+    sim_context.cc
     wanglandau.cc
+    backend/backend_factory.cc
 )
 
-add_executable(hea-wl ${DEEPTHERMO_SOURCES})
+if(DEEPTHERMO_BACKEND STREQUAL "torch")
+    list(APPEND DEEPTHERMO_CORE_SOURCES backend/torch_backend.cc)
+elseif(DEEPTHERMO_BACKEND STREQUAL "tf")
+    list(APPEND DEEPTHERMO_CORE_SOURCES backend/tf_backend.cc)
+elseif(DEEPTHERMO_BACKEND STREQUAL "redis")
+    list(APPEND DEEPTHERMO_CORE_SOURCES backend/smartredis_backend.cc)
+endif()
 
-target_link_libraries(hea-wl
-    PRIVATE
+add_library(deepthermo_core STATIC ${DEEPTHERMO_CORE_SOURCES})
+
+target_include_directories(deepthermo_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(deepthermo_core
+    PUBLIC
         deepthermo_backend
         deepthermo_platform
         deepthermo_third_party
         MPI::MPI_CXX
 )
+target_compile_options(deepthermo_core PRIVATE -Wno-narrowing)
+target_link_options(deepthermo_core PUBLIC -rdynamic)
 
 if(DEEPTHERMO_ENABLE_GLOBAL_UPDATE)
-    target_compile_definitions(hea-wl PRIVATE GLOBAL_UPDATE)
+    target_compile_definitions(deepthermo_core PUBLIC GLOBAL_UPDATE)
 endif()
-
 if(DEEPTHERMO_ENABLE_RING_ALLREDUCE)
-    target_compile_definitions(hea-wl PRIVATE COMM_RING)
+    target_compile_definitions(deepthermo_core PUBLIC COMM_RING)
 endif()
 
-# Legacy synonym while the refactor is in flight; src/main.hpp still checks
-# these names. They go away in the cleanup pass (Task 7 / Task 9).
-if(DEEPTHERMO_BACKEND STREQUAL "tf")
-    target_compile_definitions(hea-wl PRIVATE TF_BACKEND)
-endif()
-if(DEEPTHERMO_PLATFORM STREQUAL "frontier")
-    target_compile_definitions(hea-wl PRIVATE CRUSHER)
-endif()
-
-target_compile_options(hea-wl PRIVATE
-    -Wno-narrowing
-    -rdynamic
-)
+add_executable(hea-wl main.cc)
+target_link_libraries(hea-wl PRIVATE deepthermo_core)
 
 set_target_properties(hea-wl PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
