@@ -157,10 +157,12 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
 
     if (mpiState.myrank == 0) t1 = std::time(nullptr);
 
+    const bool can_swap = mpiState.nprocs > 1;
+
     if (ptState.Restart == 0) {
         for (int mcs = 0; mcs < DROPI; ++mcs) {
             mchybrid(mode);
-            if (mcs % 2 == 0) {
+            if (can_swap && mcs % 2 == 0) {
                 swap(flag);
                 flag = !flag;
             }
@@ -185,7 +187,7 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
     while (mcs < SAMPS) {
         for (int i = 0; i < SEP; ++i) {
             mchybrid(mode);
-            if (static_cast<int>(mcs * SEP + i) % 2 == 0) {
+            if (can_swap && static_cast<int>(mcs * SEP + i) % 2 == 0) {
                 swap(flag);
                 flag = !flag;
             }

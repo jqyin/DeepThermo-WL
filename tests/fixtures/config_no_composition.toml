@@ -1,0 +1,26 @@
+[lattice]
+N        = 4
+NE       = 4
+elements = ["Mo", "Nb", "Ta", "W"]
+
+[wang_landau]
+bin_width            = 0.005
+e_min                = -1.30
+e_max                = -1.20
+flatness             = 0.6
+mod_factor_init      = 1.0
+iteration_factor     = 2.0
+mod_factor_final     = 1.0e-3
+production_bin_samps = 5
+
+[parallel_tempering]
+T_init  = 10.0
+T_final = 2000.0
+samples = 10
+sep     = 1
+drop    = 10
+
+[thermodynamics]
+T_init  = 100
+T_final = 3000
+dT      = 2
