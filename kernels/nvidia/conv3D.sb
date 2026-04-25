@@ -1,0 +1,25 @@
+#!/bin/bash
+#SBATCH -A m000
+#SBATCH -J deepbench
+#SBATCH -o deepbench-%j.out
+#SBATCH -t 00:30:00
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=1
+#SBATCH -C gpu
+
+# 3D convolution kernel benchmark on Perlmutter (NVIDIA A100 + cuDNN).
+
+module load PrgEnv-gnu
+module load cudatoolkit
+
+BENCH_ROOT=./src/bin
+CONV_BENCH=$BENCH_ROOT/conv_bench
+
+if [[ ! -f "$CONV_BENCH" ]]; then
+    pushd ./src
+    make USE_TENSOR_CORES=0
+    popd
+fi
+
+srun -n 1 --gpus-per-node=1 "$CONV_BENCH" float >log.fp32

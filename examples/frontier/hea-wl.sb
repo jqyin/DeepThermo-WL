@@ -1,0 +1,27 @@
+#!/bin/bash
+#SBATCH -A stf016
+#SBATCH -J hea-wl
+#SBATCH -o hea-wl-%j.out
+#SBATCH -t 00:30:00
+#SBATCH -N 16
+#SBATCH --ntasks-per-node=8
+#SBATCH --gpus-per-node=8
+#SBATCH -C nvme
+
+# DeepThermo on OLCF Frontier (4x MI250X = 8 GCDs / node, Slurm + Slingshot).
+# Build hea-wl with scripts/build-frontier.sh first.
+
+module load PrgEnv-gnu
+module load rocm
+
+: "${TORCH_INSTALL_PREFIX:?Set TORCH_INSTALL_PREFIX to the LibTorch-ROCm install root}"
+export LD_LIBRARY_PATH="$TORCH_INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
+
+# One MPI rank per GCD. 8 GCDs/node * 16 nodes = 128 PT replicas.
+HEA_WL=${HEA_WL:-../../build-frontier/hea-wl}
+SEED=${SEED:-123}
+
+HOME=/tmp srun --kill-on-bad-exit=1 \
+    --ntasks=$((SLURM_NNODES * SLURM_NTASKS_PER_NODE)) \
+    --ntasks-per-node=$SLURM_NTASKS_PER_NODE \
+    "$HEA_WL" config.toml "$SEED"

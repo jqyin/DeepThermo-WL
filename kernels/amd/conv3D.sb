@@ -1,13 +1,15 @@
 #!/bin/bash -l
+#SBATCH -A stf016
 #SBATCH -J deepbench
 #SBATCH -N 1
-#SBATCH -t 60
-#SBATCH -A stf016
-#SBATCH --exclusive 
-#SBATCH -o deepbench.o%j
+#SBATCH -t 00:30:00
+#SBATCH --exclusive
+#SBATCH -o deepbench-%j.out
 
-# env
-module load rocm 
+# 3D convolution kernel benchmark on Frontier (AMD MI250X + MIOpen).
+
+module load PrgEnv-gnu
+module load rocm
 export CPATH=$ROCM_PATH/miopen/include:$CPATH
 export LIBRARY_PATH=$ROCM_PATH/miopen/lib:$LIBRARY_PATH
 export CPATH=$ROCM_PATH/rocblas/include:$CPATH

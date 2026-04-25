@@ -1,0 +1,44 @@
+# DeepThermo run configuration — MoNbTaW @ N=10 on Perlmutter (NVIDIA A100).
+# See examples/README.md and the v2 layout in CLAUDE.md for the full spec.
+
+[lattice]
+N              = 10
+NE             = 4
+SH             = 6
+elements       = ["Mo", "Nb", "Ta", "W"]
+composition    = [0.25, 0.25, 0.25, 0.25]
+nb_interaction = 1
+coupling_file  = "coupling.input"
+# MoNbTaW EPI offset (Ry). For MoNbTaVW use -1.7414431589249322,
+# for MoNbTaTiW use -1.5945920830411398.
+reglin_intercept = -1.2702430255548436
+Z_R              = 0.1
+
+[wang_landau]
+bin_width            = 0.0055
+e_min                = -1.2808
+e_max                = -1.2770
+flatness             = 0.6
+mod_factor_init      = 1.0
+iteration_factor     = 2.0
+mod_factor_final     = 1.0e-6
+production_bin_samps = 10000
+
+[parallel_tempering]
+metropolis_sampling = false
+T_init  = 10.0
+T_final = 2000.0
+dT      = 0.1
+samples = 10
+sep     = 1
+drop    = 10
+
+[thermodynamics]
+T_init  = 100
+T_final = 3000
+dT      = 2
+
+[model]
+# Directory containing encoder_MoNbTaW.pt and decoder_MoNbTaW.pt
+# (TorchScript output of vae-modeling/vae/src/export_torchscript.py).
+dir = "models"

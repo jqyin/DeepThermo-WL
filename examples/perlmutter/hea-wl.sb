@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH -A m000
+#SBATCH -J hea-wl
+#SBATCH -o hea-wl-%j.out
+#SBATCH -t 00:30:00
+#SBATCH -N 16
+#SBATCH --ntasks-per-node=4
+#SBATCH --gpus-per-node=4
+#SBATCH -C gpu
+
+# DeepThermo on NERSC Perlmutter (4x A100 / node, Slurm + Slingshot-11).
+# Build hea-wl with scripts/build-perlmutter.sh first.
+
+module load PrgEnv-gnu
+module load cudatoolkit
+module load cray-mpich
+
+: "${TORCH_INSTALL_PREFIX:?Set TORCH_INSTALL_PREFIX to the LibTorch-CUDA install root}"
+export LD_LIBRARY_PATH="$TORCH_INSTALL_PREFIX/lib:$LD_LIBRARY_PATH"
+
+# One MPI rank per A100. With 4 GPUs/node and 16 nodes the run uses
+# 64 PT replicas — adjust SBATCH -N and -ntasks-per-node together.
+HEA_WL=${HEA_WL:-../../build-perlmutter/hea-wl}
+SEED=${SEED:-123}
+
+srun --kill-on-bad-exit=1 \
+    --ntasks=$((SLURM_NNODES * SLURM_NTASKS_PER_NODE)) \
+    --ntasks-per-node=$SLURM_NTASKS_PER_NODE \
+    --gpus-per-node=$SLURM_GPUS_PER_NODE \
+    "$HEA_WL" config.toml "$SEED"
