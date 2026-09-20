@@ -200,6 +200,13 @@ void parallel_tempering(int nT, double DROPI, double SAMPS, double SEP, int irun
         avgM2 += M * M;
         avgM4 += M * M;
 
+        // Capture decorrelated PT samples as VAE training data. Every rank
+        // sits at its own ladder temperature, so the union across ranks spans
+        // the energy range the surrogate has to model.
+        if (alloyState.snapshot_stride > 0 && mcs % alloyState.snapshot_stride == 0) {
+            write_xyz(mcs, 0);
+        }
+
         if (mcs % CHPT_STEPS == 0) {
             std::printf("mpiState.myrank =%d, currEtot = %g, Eng = %g\n",
                         mpiState.myrank, alloyState.currEtot, Etot());

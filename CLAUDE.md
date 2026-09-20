@@ -100,9 +100,12 @@ The pre-v2 `-DTime_Series` / `-DHIST` build variants were removed in the cleanup
                        samples, sep, drop, restart
 [thermodynamics]       T_init, T_final, dT
 [model]                dir
+[output]               snapshot_stride, snapshot_lowe
 ```
 
 Only `[lattice].N`, the WL set, the PT temperatures + counts, and the thermo grid are required. Everything else has a default (uniform composition, MoNbTaW intercept, etc.).
+
+`[output]` drives VAE training-set capture via `alloy.cc::write_xyz`; both knobs default to off so production runs pay no I/O cost. `snapshot_stride = n` appends every nth PT sample to `snap_0_<rank>.xyz`; `snapshot_lowe = true` captures the first visit to each of the ten lowest WL energy slots (gated by `wlState.print_list`) into `snap_1_<rank>.xyz`. Frames are standard two-header-line xyz with `Eng`/`MC_step`/`SRO` on the comment line, consumed by `vae-modeling/preprocessing/create_vae_input.py`.
 
 ## Tests
 

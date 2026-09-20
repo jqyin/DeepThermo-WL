@@ -209,6 +209,10 @@ int WangLandau(double Ei, double Ef, SamplingMode mode) {
         const int slot = fti - wlState.LOWESTE;
         if (slot >= 0 && slot < static_cast<int>(wlState.print_list.size()) && !wlState.print_list[slot]) {
             wlState.print_list[slot] = true;
+            // First visit to this low-energy slot: capture it. These are the
+            // rare configurations the VAE most needs and PT sampling alone
+            // rarely reaches.
+            if (alloyState.snapshot_lowe) write_xyz(wlState.TotalSweeps, 1);
         }
     }
 

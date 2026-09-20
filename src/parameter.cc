@@ -7,6 +7,7 @@
 //   [parallel_tempering]   — PT warm-up / Metropolis-only sweep parameters
 //   [thermodynamics]       — temperature grid for thermoqs() output
 //   [model]                — VAE model directory
+//   [output]               — optional training-snapshot capture
 //
 // All values land directly in the SimContext fields. Range checks are
 // inline; failures throw std::runtime_error which main.cc reports + aborts.
@@ -144,6 +145,15 @@ void load_model(const toml::table& tbl) {
     alloyState.model_dir = optional<std::string>(tbl, "model", "dir", "./models");
 }
 
+void load_output(const toml::table& tbl) {
+    auto& a = alloyState;
+    a.snapshot_stride =
+        static_cast<int>(optional<int64_t>(tbl, "output", "snapshot_stride", 0));
+    a.snapshot_lowe = optional<bool>(tbl, "output", "snapshot_lowe", false);
+
+    if (a.snapshot_stride < 0) fail("output.snapshot_stride must be >= 0");
+}
+
 }  // namespace
 
 void ReadInput(const char* filename) {
@@ -160,4 +170,5 @@ void ReadInput(const char* filename) {
     load_pt(tbl);
     load_thermo(tbl);
     load_model(tbl);
+    load_output(tbl);
 }

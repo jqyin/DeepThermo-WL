@@ -58,6 +58,23 @@ TEST_CASE("ReadInput throws on out-of-range value") {
                     std::runtime_error);
 }
 
+TEST_CASE("[output] snapshot capture defaults to off") {
+    ReadInput(fixture("config_valid.toml").c_str());
+    CHECK(alloyState.snapshot_stride == 0);
+    CHECK(alloyState.snapshot_lowe == false);
+}
+
+TEST_CASE("[output] snapshot capture parses when present") {
+    ReadInput(fixture("config_snapshots.toml").c_str());
+    CHECK(alloyState.snapshot_stride == 10);
+    CHECK(alloyState.snapshot_lowe == true);
+}
+
+TEST_CASE("ReadInput throws on negative snapshot_stride") {
+    CHECK_THROWS_AS(ReadInput(fixture("config_bad_snapshot.toml").c_str()),
+                    std::runtime_error);
+}
+
 TEST_CASE("ReadInput throws on malformed TOML") {
     CHECK_THROWS_AS(ReadInput(fixture("config_garbled.toml").c_str()),
                     std::runtime_error);

@@ -472,19 +472,25 @@ void write_pos() {
     std::fclose(ofp);
 }
 
-void write_xyz(int frame) {
+void write_xyz(int step, int group) {
     const int NE = alloyState.NE;
     const int SH = alloyState.SH;
     char s[512];
-    std::snprintf(s, sizeof(s), "snap_%d_%d.xyz", frame, mpiState.myrank);
+    std::snprintf(s, sizeof(s), "snap_%d_%d.xyz", group, mpiState.myrank);
     FILE* ofp = std::fopen(s, "ab+");
+    if (ofp == nullptr) deepthermo::die("write_xyz(): could not open %s", s);
+
+    // Standard xyz has exactly two header lines per frame. The short-range
+    // order table therefore rides on the comment line rather than a third
+    // line of its own, so readers that assume the two-line header
+    // (vae-modeling/utils/xyz_reader.py, VMD, ASE) parse this directly.
     std::fprintf(ofp, "%d\n", alloyState.N_3);
-    std::fprintf(ofp, "Eng = %.8lg  MC_step = %d\n", alloyState.currEtot, frame);
+    std::fprintf(ofp, "Eng = %.8lg  MC_step = %d  SRO =", alloyState.currEtot, step);
 
     for (int shell = 0; shell < SH; ++shell) {
         for (int i = 0; i < NE - 1; ++i) {
             for (int j = i + 1; j < NE; ++j) {
-                std::fprintf(ofp, "%.8lg\t",
+                std::fprintf(ofp, " %.8lg",
                              1.0 * alloyState.W_at(i, j, shell) /
                                  alloyState.NS[shell] / alloyState.N_3);
             }

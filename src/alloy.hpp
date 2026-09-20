@@ -128,11 +128,22 @@ double L1();
 void write_pos();
 
 /**
- * @brief Dump the current configuration to a per-rank xyz snapshot.
+ * @brief Append the current configuration to a per-rank xyz snapshot.
  *
- * @param frame Sequence index appended to the filename (`snap_<frame>_<rank>.xyz`).
+ * Emits one standard two-header-line xyz frame: the atom count, then a
+ * comment line carrying `Eng`, `MC_step` and the short-range-order table,
+ * then one `element x y z` line per site. Frames accumulate in the file, so
+ * repeated calls with the same `group` build a trajectory that
+ * `vae-modeling/preprocessing/create_vae_input.py` can consume directly.
+ *
+ * Driven by AlloyState::snapshot_stride / AlloyState::snapshot_lowe; both
+ * are off by default.
+ *
+ * @param step  MC step recorded on the comment line.
+ * @param group Trajectory id used in the filename (`snap_<group>_<rank>.xyz`);
+ *              0 for PT samples, 1 for the one-shot low-energy dumps.
  */
-void write_xyz(int frame);
+void write_xyz(int step, int group);
 
 /**
  * @brief Compute thermodynamic quantities from the converged DOS.

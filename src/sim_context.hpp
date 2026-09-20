@@ -255,6 +255,21 @@ public:
     std::string model_dir = "./models";           ///< VAE artefact directory.
 
     /**
+     * @brief Capture training snapshots for the VAE (see ::write_xyz).
+     *
+     * `snapshot_stride > 0` appends every Nth parallel-tempering sample to
+     * `snap_0_<rank>.xyz`; 0 (the default) disables PT capture entirely.
+     * `snapshot_lowe` re-enables the one-shot dump taken the first time the
+     * WL walker reaches each of the ten lowest energy slots, gated by
+     * WLState::print_list, and lands in `snap_1_<rank>.xyz`.
+     *
+     * Both default to off so production runs pay no I/O cost; they exist to
+     * generate the training set consumed by `vae-modeling`.
+     */
+    int snapshot_stride = 0;
+    bool snapshot_lowe = false;
+
+    /**
      * @brief Allocate the NE-dependent arrays (J, W, NS, Dist, NT).
      *
      * Call once after ::ReadInput finalises `NE` and `SH`. Safe to call
