@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DeepThermo-WL is an MPI C++ engine for distributed Monte Carlo sampling (parallel tempering + Wang–Landau) of high-entropy alloys, with large MC moves proposed by a pre-trained VAE. The repo went through a v2 refactor (April 2026); the layout, build system, input format, and default backend all changed at once. If you are reading older commit messages they reference dropped concepts (the makefile system, the `wlrun1D.input` parser, the four extern-globals pattern, Summit/Crusher targets, the inline-defined `model.hpp`/`client.hpp`).
 
+## Workflow tutorial
+
+`docs/vae-workflow.md` is the end-to-end VAE pipeline as runnable commands
+(collect → preprocess → split → train → export → WL run → verify), with the
+measured numbers from a real pass and the known pitfalls. Start there for
+anything touching the training loop or the global move.
+
 ## Paper reference
 
 Yin, Wang, Shankar, *DeepThermo*, IPDPS 2023, DOI 10.1109/IPDPS54959.2023.00041. PDF on this machine at `~/Downloads/DeepThermo_Deep_Learning_Accelerated_Parallel_Monte_Carlo_Sampling_for_Thermodynamics_Evaluation_of_High_Entropy_Alloys.pdf`. Run `pdftotext -layout <pdf> /tmp/deepthermo_paper.txt` (poppler is at `/opt/homebrew/bin`) when you need the body. Algorithm 1 is the spec for `main.cc`'s outer WL loop; Table I is the encoder/decoder graph spec — preserve graph node names (`input_1`, `input_2`, `Identity`) when retraining.
