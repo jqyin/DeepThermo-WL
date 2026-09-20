@@ -141,6 +141,21 @@ void sweepWL(int nsweeps, SamplingMode mode) {
     for (int i = 0; i < nsweeps; ++i) BondSwap(mode);
 }
 
+void report_vae(int sweeps, double lnwlf) {
+    // Collective: every rank must call this. Counts are cumulative, so
+    // differencing successive rows gives the rate within an interval.
+    int vloc[2] = {alloyState.attv, alloyState.accv};
+    int vsum[2] = {0, 0};
+    MPI_Reduce(vloc, vsum, 2, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    if (mpiState.myrank != 0) return;
+
+    FILE* fp = std::fopen("vae.dat", "a");
+    if (fp == nullptr) return;
+    std::fprintf(fp, "%d\t%g\t%d\t%d\t%g\n", sweeps, lnwlf, vsum[0], vsum[1],
+                 vsum[0] > 0 ? 1.0 * vsum[1] / vsum[0] : 0.0);
+    std::fclose(fp);
+}
+
 void global_update(int nsweeps, double Flat) {
     double duration = 0.0;
     double tmp_flat = 0.0;
@@ -165,6 +180,7 @@ void global_update(int nsweeps, double Flat) {
 
         wlState.IterSweeps += 1;
         wlState.TotalSweeps += 1;
+        if ((wlState.IterSweeps % 100) == 0) report_vae(wlState.TotalSweeps, wlState.lnwlf);
 
         MPI_Allreduce(wlState.wlHi.data(), wlState.wlHd.data(),
                       wlState.D1BINS, MPI_UNSIGNED_SHORT, MPI_SUM, MPI_COMM_WORLD);

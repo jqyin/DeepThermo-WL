@@ -85,6 +85,15 @@ void read_restart();
 void global_update(int sweeps, double flat_target);
 
 /**
+ * @brief Append cumulative VAE global-move acceptance to vae.dat.
+ *
+ * Collective -- every rank must call it. Columns: total sweeps, lnwlf,
+ * attempts, accepts, ratio. This is the number that says whether the VAE
+ * surrogate is earning its inference cost against plain local moves.
+ */
+void report_vae(int sweeps, double lnwlf);
+
+/**
  * @brief Wang–Landau acceptance test for one trial energy change.
  *
  * @param Ei Initial total energy.

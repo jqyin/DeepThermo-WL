@@ -163,7 +163,15 @@ int main(int argc, char* argv[]) {
             std::fill(wlState.wllngi.begin(), wlState.wllngi.end(), 0.0);
             std::fill(wlState.wlHi.begin(), wlState.wlHi.end(), 0);
             tmp_flat = flatWL(WLdos);
-            if ((wlState.IterSweeps % 100) == 0 && mpiState.myrank == 0) write_DOS_H();
+
+            // Periodic checkpoint: DOS plus the VAE global-move acceptance.
+            // The reduce is collective, so it sits outside the rank-0 guard.
+            // Counts are cumulative; difference successive rows for the rate
+            // within an interval, which drifts as lnwlf shrinks.
+            if ((wlState.IterSweeps % 100) == 0) {
+                report_vae(wlState.TotalSweeps, wlState.lnwlf);
+                if (mpiState.myrank == 0) write_DOS_H();
+            }
         }
 
         if (mpiState.myrank == 0) write_DOS_H();

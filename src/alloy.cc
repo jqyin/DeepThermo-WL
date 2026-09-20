@@ -25,6 +25,7 @@ constexpr double kTscaleMeV = 0.08618;
 
 void initialize() {
     alloyState.attd = alloyState.accd = 0;
+    alloyState.attv = alloyState.accv = 0;
 
     ini_coupling();
     alloyState.invN = 1.0 / (1.0 * alloyState.N * alloyState.N * alloyState.N);
@@ -435,7 +436,7 @@ void vae_update(SamplingMode mode) {
     const double E1 = alloyState.currEtot;
     const double E2 = Etot();
     const double deltaE = E2 - E1;
-    alloyState.attd++;
+    alloyState.attv++;
 
     auto revert = [&]() {
         alloyState.Atom = alloyState.Atomo;
@@ -445,14 +446,14 @@ void vae_update(SamplingMode mode) {
     if (mode == metropolis) {
         if (Metropolis(alloyState.currEtot, alloyState.currEtot + deltaE) == 1) {
             alloyState.currEtot += deltaE;
-            alloyState.accd++;
+            alloyState.accv++;
         } else {
             revert();
         }
     } else {
         if (WangLandau(alloyState.currEtot, alloyState.currEtot + deltaE, mode) == 1) {
             alloyState.currEtot += deltaE;
-            alloyState.accd++;
+            alloyState.accv++;
         } else {
             revert();
         }

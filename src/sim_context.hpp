@@ -217,6 +217,18 @@ public:
     int attd = 0; ///< Attempted atom-swap moves on this rank.
     int accd = 0; ///< Accepted atom-swap moves on this rank.
 
+    /**
+     * @brief Attempted / accepted VAE global moves on this rank.
+     *
+     * Kept separate from `attd`/`accd`: BondSwap fires N^3 times per sweep
+     * while ::vae_update fires at most once, so sharing the counters buries
+     * the global-move signal under a ~1000:1 dilution. This is the ratio
+     * that says whether the surrogate is earning its inference cost, and
+     * the one to watch when tuning the theta gate.
+     */
+    int attv = 0;
+    int accv = 0;
+
     std::vector<short> Atom;   ///< Per-site atom type (size N^3).
     std::vector<short> Atomo;  ///< Pre-VAE checkpoint of `Atom` for revert.
 
