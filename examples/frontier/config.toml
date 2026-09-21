@@ -13,9 +13,9 @@ reglin_intercept = -1.2702430255548436
 Z_R              = 0.1
 
 [wang_landau]
-bin_width            = 0.0055
+bin_width            = 0.5
 e_min                = -1.2808
-e_max                = -1.2770
+e_max                = -1.0770
 flatness             = 0.6
 mod_factor_init      = 1.0
 iteration_factor     = 2.0
