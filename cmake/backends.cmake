@@ -14,6 +14,36 @@ function(deepthermo_configure_backend backend)
 
     if(backend STREQUAL "torch")
         find_package(Torch REQUIRED)
+
+        # Some ROCm LibTorch wheels bake the *unversioned* /opt/rocm/lib path
+        # into c10_hip's/torch_hip's INTERFACE_LINK_LIBRARIES (from whatever
+        # build host produced the wheel), instead of the ROCM_PATH that was
+        # actually resolved here. HPC systems that keep only versioned
+        # /opt/rocm-<ver> trees (no /opt/rocm symlink) then fail at build.make
+        # generation time with "No rule to make target /opt/rocm/lib/...".
+        # Rewrite those entries to the ROCm install CMake actually found.
+        if((TARGET c10_hip OR TARGET torch_hip) AND NOT EXISTS "/opt/rocm/lib")
+            if(DEFINED ENV{ROCM_PATH})
+                set(_deepthermo_rocm_lib_dir "$ENV{ROCM_PATH}/lib")
+            elseif(HIP_ROOT_DIR)
+                set(_deepthermo_rocm_lib_dir "${HIP_ROOT_DIR}/lib")
+            endif()
+            if(_deepthermo_rocm_lib_dir)
+                foreach(_deepthermo_hip_tgt c10_hip torch_hip)
+                    if(TARGET ${_deepthermo_hip_tgt})
+                        get_target_property(_deepthermo_hip_libs ${_deepthermo_hip_tgt} INTERFACE_LINK_LIBRARIES)
+                        if(_deepthermo_hip_libs)
+                            string(REPLACE "/opt/rocm/lib/" "${_deepthermo_rocm_lib_dir}/"
+                                   _deepthermo_hip_libs "${_deepthermo_hip_libs}")
+                            set_target_properties(${_deepthermo_hip_tgt} PROPERTIES
+                                INTERFACE_LINK_LIBRARIES "${_deepthermo_hip_libs}")
+                        endif()
+                    endif()
+                endforeach()
+            endif()
+            unset(_deepthermo_rocm_lib_dir)
+        endif()
+
         # Torch's CMake config sets TORCH_CXX_FLAGS which may include
         # -D_GLIBCXX_USE_CXX11_ABI=<0|1>; propagate as INTERFACE.
         if(TORCH_CXX_FLAGS)
